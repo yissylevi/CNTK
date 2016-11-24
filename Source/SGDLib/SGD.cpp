@@ -139,6 +139,52 @@ void SGD<ElemType>::Adapt(wstring origModelFileName, wstring refNodeName,
 
 static double MomentumPerMB(double momentumPerSample, size_t minibatchSize);
 
+struct BestEpoch
+{
+    double criterionMinValue = numeric_limits<double>::max();
+    int32_t epochIndex = -1;
+};
+
+// Loops through criteria (i.e. score) and updates the best one if smaller value is found.
+static void UpdateBestEpochs(
+    const vector<EpochCriterion>& vScore,
+    const vector<wstring>& cvSetTrainAndEvalNodes,
+    const int epoch,
+    map<wstring, BestEpoch>& criteriaBestEpoch)
+{
+    for (size_t i = 0; i < vScore.size(); ++i)
+    {
+        BestEpoch& nodeBestEpoch = criteriaBestEpoch.at(cvSetTrainAndEvalNodes[i]);
+        if (vScore[i].Average() < nodeBestEpoch.criterionMinValue)
+        {
+            nodeBestEpoch.criterionMinValue = vScore[i].Average();
+            nodeBestEpoch.epochIndex = epoch;
+        }
+    }
+}
+
+// For each criterion copies the best epoch to the new file with criterion name appended.
+template <class ElemType>
+static void CopyBestEpochs(
+    const map<wstring, BestEpoch>& criteriaBestEpoch, const SGD<ElemType>& sgd, const int lastEpoch)
+{
+    const wstring& modelBaseName = sgd.GetModelNameForEpoch(lastEpoch);
+
+    for (const auto& bestEpoch : criteriaBestEpoch)
+    {
+        const wstring modelCriterionName = modelBaseName + L"_" + bestEpoch.first;
+        const wstring modelEpochName = sgd.GetModelNameForEpoch(bestEpoch.second.epochIndex);
+        copyOrDie(modelEpochName, modelCriterionName);
+        LOGPRINTF(
+            stderr,
+            "Best epoch for criterion '%ls' is %d and model %ls copied to %ls\n",
+            bestEpoch.first.c_str(),
+            bestEpoch.second.epochIndex + 1, // In actual loop epochs are 0 indexed but all outputs use 1 indexed.
+            modelEpochName.c_str(),
+            modelCriterionName.c_str());
+    }
+}
+
 template <class ElemType>
 void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                                       bool networkLoadedFromCheckpoint,
@@ -363,6 +409,16 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
             net->Save(GetModelNameForEpoch(int(startEpoch) - 1));
     }
 
+    map<wstring, BestEpoch> criteriaBestEpoch;
+    if (!criterionNodes.empty())
+    {
+        criteriaBestEpoch.emplace(criterionNodes[0]->NodeName(), BestEpoch());
+    }
+    for (const ComputationNodeBasePtr& node : evaluationNodes)
+    {
+        criteriaBestEpoch.emplace(node->NodeName(), BestEpoch());
+    }
+
     size_t totalTrainingSamplesSeen = 0; // aggregated over all epochs, for logging purposes only
 
     bool learnRateInitialized = false;
@@ -375,7 +431,8 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                                                      smoothedGradients,
                                                      smoothedCounts,
                                                      /*out*/ prevCriterion,
-                                                     /*out*/ m_prevChosenMinibatchSize);
+                                                     /*out*/ m_prevChosenMinibatchSize,
+                                                     criteriaBestEpoch);
         if (learnRateInitialized)
             prevLearnRates[startEpoch % m_numPrevLearnRates] = learnRatePerSample;
     }
@@ -478,7 +535,7 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                                                                      trainSetDataReader, featureNodes, labelNodes,
                                                                      criterionNodes, evaluationNodes, inputMatrices,
                                                                      learnableNodes, smoothedGradients, smoothedCounts,
-                                                                     learnRateInitialized, largestPrevLearnRatePerSample);
+                                                                     learnRateInitialized, largestPrevLearnRatePerSample, criteriaBestEpoch);
             learningRateAdjustmentFactor = newLearningRatePerSample / learnRatePerSample;
             learnRatePerSample = newLearningRatePerSample;
 
@@ -525,7 +582,8 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                                                           m_mbSize[i], featureNodes, labelNodes,
                                                           criterionNodes, evaluationNodes,
                                                           inputMatrices, learnableNodes,
-                                                          smoothedGradients, smoothedCounts, learningRateAdjustmentFactor);
+                                                          smoothedGradients, smoothedCounts, learningRateAdjustmentFactor,
+                                                          criteriaBestEpoch);
             if (m_traceLevel < 1 && chosenMinibatchSize != m_prevChosenMinibatchSize)
                 LOGPRINTF(stderr, "Minibatch size adapted to %d.\n", (int)chosenMinibatchSize);
             m_prevChosenMinibatchSize = chosenMinibatchSize;
@@ -627,6 +685,9 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                 //fprintf(stderr, "%s %ls = %.8f * %d", k ? ";" : "", cvSetTrainAndEvalNodes[k].c_str(), vScore[k].Average(), (int)vScore[k].second);
             fprintf(stderr, "\n");
 
+            // Loops through criteria (i.e. score) and updates the best one if smaller value is found.
+            UpdateBestEpochs(vScore, cvSetTrainAndEvalNodes, i, criteriaBestEpoch);
+
             if (m_useCVSetControlLRIfCVExists)
             {
                 if (m_useEvalCriterionControlLR && vScore.size() > 1)
@@ -678,7 +739,8 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                                        smoothedGradients,
                                        smoothedCounts,
                                        /*out*/ prevCriterion,
-                                       /*out*/ m_prevChosenMinibatchSize);
+                                       /*out*/ m_prevChosenMinibatchSize,
+                                       criteriaBestEpoch);
                     loadedPrevModel = true;
                 }
             }
@@ -764,11 +826,27 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
                 // Set i back to the loaded model
                 i -= m_learnRateAdjustInterval;
                 LOGPRINTF(stderr, "SGD: revoke back to and update checkpoint file for epoch %d\n", i+1); // report 1 based epoch number
-                SaveCheckPointInfo(i, totalTrainingSamplesSeen, learnRatePerSample, smoothedGradients, smoothedCounts, prevCriterion, chosenMinibatchSize);
+                SaveCheckPointInfo(
+                    i,
+                    totalTrainingSamplesSeen,
+                    learnRatePerSample,
+                    smoothedGradients,
+                    smoothedCounts,
+                    prevCriterion,
+                    chosenMinibatchSize,
+                    criteriaBestEpoch);
             }
             else
             {
-                SaveCheckPointInfo(i, totalTrainingSamplesSeen, learnRatePerSample, smoothedGradients, smoothedCounts, prevCriterion, chosenMinibatchSize);
+                SaveCheckPointInfo(
+                    i,
+                    totalTrainingSamplesSeen,
+                    learnRatePerSample,
+                    smoothedGradients,
+                    smoothedCounts,
+                    prevCriterion,
+                    chosenMinibatchSize,
+                    criteriaBestEpoch);
                 auto modelName = GetModelNameForEpoch(i);
                 if (m_traceLevel > 0)
                     LOGPRINTF(stderr, "SGD: Saving checkpoint model '%ls'\n", modelName.c_str());
@@ -810,6 +888,12 @@ void SGD<ElemType>::TrainOrAdaptModel(int startEpoch, ComputationNetworkPtr net,
         }
     }
     // --- END OF MAIN EPOCH LOOP
+
+    if ((m_mpi == nullptr) || m_mpi->IsMainNode())
+    {
+        // For each criterion copies the best epoch to the new file with criterion name appended.
+        CopyBestEpochs(criteriaBestEpoch, *this, m_maxEpochs - 1);
+    }
 
     // Synchronize all ranks before proceeding to ensure that
     // rank 0 has finished writing the model file
@@ -1625,7 +1709,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                              const std::list<ComputationNodeBasePtr>& learnableNodes,
                                              std::list<Matrix<ElemType>>& smoothedGradients, vector<double> smoothedCounts,
                                              const bool learnRateInitialized,
-                                             const double largestPrevLearnRatePerSample)
+                                             const double largestPrevLearnRatePerSample,
+                                             map<wstring, BestEpoch>& criteriaBestEpoch)
 {
     double bestLearnRatePerSample = curLearnRate;
 
@@ -1658,7 +1743,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                        smoothedGradients,
                        smoothedCounts,
                        /*out*/ prevCriterion,
-                       /*out*/ dummyMinibatchSize);
+                       /*out*/ dummyMinibatchSize,
+                       criteriaBestEpoch);
 
     // if model is not changed this is what we will get
     EpochCriterion baseCriterion;
@@ -1671,7 +1757,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                     smoothedGradients, smoothedCounts,
                                     /*out*/ baseCriterion, /*out*/ epochEvalErrors,
                                     "BaseAdaptiveLearnRateSearch:",
-                                    numFramesToUseInSearch);
+                                    numFramesToUseInSearch,
+                                    criteriaBestEpoch);
 
     if (m_autoLearnRateSearchType == LearningRateSearchAlgorithm::SearchBeforeEpoch)
     {
@@ -1699,7 +1786,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                         learnableNodes, smoothedGradients, smoothedCounts,
                                         /*out*/ epochCriterion, /*out*/ epochEvalErrors,
                                         "AdaptiveLearnRateSearch:",
-                                        numFramesToUseInSearch);
+                                        numFramesToUseInSearch,
+                                        criteriaBestEpoch);
     } while (epochCriterion.IsNan() || (epochCriterion.Average() > baseCriterion.Average() && learnRatePerSample > minLearnRate));
 
     bestLearnRatePerSample = learnRatePerSample;
@@ -1721,7 +1809,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                         smoothedGradients, smoothedCounts,
                                         /*out*/ leftCriterion, /*out*/ epochEvalErrors,
                                         "DetailBaseAdaptiveLearnRateSearch:",
-                                        numFramesToUseInSearch);
+                                        numFramesToUseInSearch,
+                                        criteriaBestEpoch);
 
         while (rightLearnRatePerSample > leftLearnRatePerSample * 1.2)
         {
@@ -1743,7 +1832,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                                 /*out*/ rightCriterion,
                                                 /*out*/ epochEvalErrors,
                                                 "DetailRightAdaptiveLearnRateSearch:",
-                                                numFramesToUseInSearch);
+                                                numFramesToUseInSearch,
+                                                criteriaBestEpoch);
             }
             else
             {
@@ -1763,7 +1853,8 @@ double SGD<ElemType>::SearchForBestLearnRate(ComputationNetworkPtr net,
                                                 /*out*/ leftCriterion,
                                                 /*out*/ epochEvalErrors,
                                                 "DetailLeftAdaptiveLearnRateSearch:",
-                                                numFramesToUseInSearch);
+                                                numFramesToUseInSearch,
+                                                criteriaBestEpoch);
             }
         }
 
@@ -1798,7 +1889,8 @@ size_t SGD<ElemType>::AdaptiveMinibatchSizing(ComputationNetworkPtr net,
                                               StreamMinibatchInputs* inputMatrices,
                                               const std::list<ComputationNodeBasePtr>& learnableNodes,
                                               std::list<Matrix<ElemType>>& smoothedGradients, vector<double> smoothedCounts,
-                                              const double learningRateAdjustmentFactor)
+                                              const double learningRateAdjustmentFactor,
+                                              std::map<std::wstring, BestEpoch>& criteriaBestEpoch)
 {
     size_t minMinibatchSize = initialMinibatchSize;
     size_t chosenMinibatchSize = initialMinibatchSize;
@@ -1866,7 +1958,8 @@ size_t SGD<ElemType>::AdaptiveMinibatchSizing(ComputationNetworkPtr net,
                                                          labelNodes, criterionNodes,
                                                          evaluationNodes, inputMatrices,
                                                          learnableNodes, smoothedGradients, smoothedCounts,
-                                                         minMinibatchSize, maxMinibatchSize);
+                                                         minMinibatchSize, maxMinibatchSize,
+                                                         criteriaBestEpoch);
     }
 
     return chosenMinibatchSize;
@@ -1899,7 +1992,8 @@ size_t SGD<ElemType>::SearchForBestMinibatchSize(ComputationNetworkPtr net,
                                                  StreamMinibatchInputs* inputMatrices,
                                                  const std::list<ComputationNodeBasePtr>& learnableNodes,
                                                  std::list<Matrix<ElemType>>& smoothedGradients, std::vector<double> smoothedCounts,
-                                                 const size_t minMinibatchSize, const size_t maxMinibatchSize)
+                                                 const size_t minMinibatchSize, const size_t maxMinibatchSize,
+                                                 std::map<std::wstring, BestEpoch>& criteriaBestEpoch)
 {
     // may happen for automatically reduced learning rates
     if (minMinibatchSize > maxMinibatchSize)
@@ -1943,7 +2037,8 @@ size_t SGD<ElemType>::SearchForBestMinibatchSize(ComputationNetworkPtr net,
                                         learnableNodes, smoothedGradients, smoothedCounts,
                                         /*out*/ epochCriterion, /*out*/ epochEvalErrors,
                                         isFirstIteration ? "BaseAdaptiveMinibatchSearch:" : "AdaptiveMinibatchSearch:",
-                                        numFramesToUseInSearch);
+                                        numFramesToUseInSearch,
+                                        criteriaBestEpoch);
 
         if (isFirstIteration)
         {
@@ -2006,7 +2101,8 @@ void SGD<ElemType>::TrainOneMiniEpochAndReloadModel(ComputationNetworkPtr net,
                                                     /*out*/ EpochCriterion& epochCriterion,
                                                     /*out*/ std::vector<EpochCriterion>& epochEvalErrors,
                                                     std::string prefixMsg,
-                                                    const size_t maxNumOfSamples)
+                                                    const size_t maxNumOfSamples,
+                                                    std::map<std::wstring, BestEpoch>& criteriaBestEpoch)
 {
     TrainOneEpoch(net, refNet, refNode, epochNumber, epochSize,
                   trainSetDataReader, learnRatePerSample, minibatchSize, featureNodes,
@@ -2037,7 +2133,8 @@ void SGD<ElemType>::TrainOneMiniEpochAndReloadModel(ComputationNetworkPtr net,
                        smoothedGradients,
                        smoothedCounts,
                        /*out*/ dummyPrevCriterion,
-                       /*out*/ dummyMinibatchSize);
+                       /*out*/ dummyMinibatchSize,
+                       criteriaBestEpoch);
 }
 
 // Attemps to compute the error signal for the whole utterance, which will
@@ -2278,7 +2375,8 @@ void SGD<ElemType>::SaveCheckPointInfo(const size_t epoch, const size_t totalSam
                                        const std::list<Matrix<ElemType>>& smoothedGradients,
                                        const std::vector<double>& smoothedCounts,
                                        const double prevCriterion,
-                                       const size_t minibatchSize)
+                                       const size_t minibatchSize,
+                                       const map<wstring, BestEpoch>& criteriaBestEpoch)
 {
     // In case of parallel training only the main node should we saving the checkpoint to prevent
     // the parallel training nodes from colliding to write the same file
@@ -2323,6 +2421,15 @@ void SGD<ElemType>::SaveCheckPointInfo(const size_t epoch, const size_t totalSam
 
             fstream.PutMarker(FileMarker::fileMarkerEndSection, L"ECount");
 
+            fstream.PutMarker(FileMarker::fileMarkerBeginSection, L"BCriteria");
+            const int32_t criteriaSize = static_cast<int32_t>(criteriaBestEpoch.size());
+            fstream << criteriaSize;
+            for (const auto& criterion : criteriaBestEpoch)
+            {
+                fstream << criterion.second.criterionMinValue << criterion.second.epochIndex;
+            }
+            fstream.PutMarker(FileMarker::fileMarkerEndSection, L"ECriteria");
+
             fstream.PutMarker(FileMarker::fileMarkerEndSection, L"ECKP");
             if (m_pMASGDHelper)
                 m_pMASGDHelper->SaveToCheckPoint(fstream);
@@ -2342,7 +2449,8 @@ bool SGD<ElemType>::TryLoadCheckPointInfo(const size_t epochNumber,
                                           std::list<Matrix<ElemType>>& smoothedGradients,
                                           std::vector<double>& smoothedCounts,
                                           /*out*/ double& prevCriterion,
-                                          /*out*/ size_t& minibatchSize)
+                                          /*out*/ size_t& minibatchSize,
+                                          map<wstring, BestEpoch>& criteriaBestEpoch)
 {
     // gracefully handle if a checkpoint file is missing
     // This means a user wanted to continue training from an older model, but that model had no checkpoint info anymore.
@@ -2360,7 +2468,7 @@ bool SGD<ElemType>::TryLoadCheckPointInfo(const size_t epochNumber,
         return false;
     }
 
-    LoadCheckPointInfo(epochNumber, totalSamplesSeen, learnRatePerSample, smoothedGradients, smoothedCounts, prevCriterion, minibatchSize);
+    LoadCheckPointInfo(epochNumber, totalSamplesSeen, learnRatePerSample, smoothedGradients, smoothedCounts, prevCriterion, minibatchSize, criteriaBestEpoch);
     return true;
 }
 
@@ -2371,7 +2479,8 @@ void SGD<ElemType>::LoadCheckPointInfo(const size_t epochNumber,
                                        std::list<Matrix<ElemType>>& smoothedGradients,
                                        std::vector<double>& smoothedCounts,
                                        /*out*/ double& prevCriterion,
-                                       /*out*/ size_t& minibatchSize)
+                                       /*out*/ size_t& minibatchSize,
+                                       map<wstring, BestEpoch>& criteriaBestEpoch)
 {
     let checkPointFileName = GetCheckPointFileNameForEpoch(int(epochNumber));
     //fprintf(stderr, "Loading checkpoint info from %ls\n", checkPointFileName.c_str());
@@ -2420,6 +2529,23 @@ void SGD<ElemType>::LoadCheckPointInfo(const size_t epochNumber,
     else // deal with legacy checkpoints
         std::fill(smoothedCounts.begin(), smoothedCounts.end(), static_cast<double>(minibatchSize));
 
+    if (fstream.TryGetMarker(FileMarker::fileMarkerBeginSection, L"BCriteria"))
+    {
+        int32_t criteriaSize = 0;
+        fstream >> criteriaSize;
+        // Sanity check: criteria size in checkpoint must be the same as preallocated one we shall fill in.
+        if (criteriaSize != static_cast<int32_t>(criteriaBestEpoch.size()))
+        {
+            RuntimeError(
+                "Criteria size mismatch: checkpoint size %d but input size %d",
+                criteriaSize,
+                static_cast<int32_t>(criteriaBestEpoch.size()));
+        }
+        for (auto& criterion : criteriaBestEpoch)
+            fstream >> criterion.second.criterionMinValue >> criterion.second.epochIndex;
+        fstream.GetMarker(FileMarker::fileMarkerBeginSection, L"ECriteria");
+    }
+
     fstream.GetMarker(FileMarker::fileMarkerEndSection, L"ECKP");
 
     if (m_pMASGDHelper)
@@ -2437,7 +2563,7 @@ wstring SGD<ElemType>::GetCheckPointFileNameForEpoch(const int epoch)
 }
 
 template <class ElemType>
-wstring SGD<ElemType>::GetModelNameForEpoch(const int epoch, bool bLastModel)
+wstring SGD<ElemType>::GetModelNameForEpoch(const int epoch, bool bLastModel) const
 {
     int epoch1Base = epoch + 1;
     if (epoch1Base == m_maxEpochs || bLastModel)
