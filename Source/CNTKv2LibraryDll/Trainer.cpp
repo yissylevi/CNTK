@@ -161,8 +161,7 @@ namespace CNTK
     double Trainer::TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
     {
         size_t sampleCount = 0;
-        auto accumulatedError = TestMinibatch(arguments, computeDevice, sampleCount);
-        return accumulatedError / sampleCount;
+        return TestMinibatch(arguments, computeDevice, sampleCount);
     }
 
     double Trainer::TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice, size_t& sampleCount)
@@ -175,7 +174,7 @@ namespace CNTK
 
         m_combinedTrainingFunction->Forward(arguments, outputs, computeDevice);
         sampleCount = GetSampleCount(m_testSampleCountVar, outputs[m_testSampleCountVar]);
-        return GetScalarValue(outputs[m_aggregatedEvaluationFunction]);
+        return (GetScalarValue(outputs[m_aggregatedEvaluationFunction]) / sampleCount);
     }
 
     bool Trainer::TrainMinibatch(const std::unordered_map<Variable, MinibatchData>& arguments, const DeviceDescriptor& computeDevice /*= DeviceDescriptor::UseDefaultDevice()*/)
