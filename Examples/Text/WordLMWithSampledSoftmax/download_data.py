@@ -27,8 +27,8 @@ def count_words_in_file(path):
         return word2count
 
 # from a dictionary mapping words to counts creates two files: 
-# * a vocabulary file containing all words sorted by drecreasing frequency, one word per line
-# * a frequency file containg the frequencies of these word, one number per line.
+# * a vocabulary file containing all words sorted by decreasing frequency, one word per line
+# * a frequency file containing the frequencies of these word, one number per line.
 def write_vocab_and_frequencies(word2count, vocab_file_path, freq_file_path, word2count_file_path, word2id_file_path):
     vocab_file = open(vocab_file_path,'w', newline='\r\n')
     freq_file = open(freq_file_path,'w', newline='\r\n')
@@ -107,7 +107,7 @@ if __name__=='__main__':
     os.mkdir(Paths.data_dir)
     append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_test),       Paths.test)
     append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_train),      Paths.train)
-    append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_validation), Paths.validation, max_lines_in_output = 10)
+    append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_validation), Paths.validation, max_lines_in_output = 50)
 
     fileReader.close()
 

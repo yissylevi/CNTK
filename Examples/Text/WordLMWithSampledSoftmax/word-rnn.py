@@ -23,6 +23,11 @@ from download_data import Paths
 from cntk.device import set_default_device, cpu, gpu
 
 # Setting global parameters
+use_sampled_softmax = True
+softmax_sample_size = 500 # Applies only when 'use_sampled_softmax = True'
+
+use_sparse = True
+
 hidden_dim = 200
 num_layers = 2
 num_epochs = 10
@@ -30,17 +35,15 @@ sequence_length = 40
 sequences_per_batch = 10
 alpha = 0.75
 learning_rate = 0.002
-softmax_sample_size = 500
+momentum_as_time_constant = 10000
 clipping_threshold_per_sample = 5.0
 token_to_id_path        = './ptb/token2id.txt'
 validation_file_path    = './ptb/valid.txt'
 train_file_path         = './ptb/train.txt'
 token_frequencies_file_path = './ptb/freq.txt'
 segment_sepparator = '<eos>'
-num_samples_between_progress_report = 20000
+num_samples_between_progress_report = 100000
 
-use_sampled_softmax = True
-use_sparse = True
 
 # reads a file with one number per line and returns the numbers as a list
 def load_sampling_weights(sampling_weights_file_path):
@@ -192,6 +195,8 @@ def train_lm():
     # cross_entropy: this is used training criterion
     # error: this a binary indicator if the model predicts the correct token
     z, cross_entropy, error = create_model(input_sequence, label_sequence, data.vocab_dim, hidden_dim)
+
+    # For measurement we use the (build in) full softmax.
     full_ce = C.cross_entropy_with_softmax(z, label_sequence)
 
     # print out some useful training information
@@ -200,16 +205,12 @@ def train_lm():
     # Run the training loop
     num_trained_samples = 0
     num_trained_samples_since_last_report = 0
-    lr = learning_rate
     for epoch_count in range(num_epochs):
-        if epoch_count > 3:
-            lr = lr / 2
-
         # Instantiate the trainer object to drive the model training
-        lr_per_sample = learning_rate_schedule(lr, UnitType.sample)
-        momentum_time_constant = momentum_as_time_constant_schedule(10000)
+        lr_schedule = learning_rate_schedule(learning_rate, UnitType.sample)
+        momentum_schedule = momentum_as_time_constant_schedule(momentum_as_time_constant)
         gradient_clipping_with_truncation = True
-        learner = momentum_sgd(z.parameters, lr_per_sample, momentum_time_constant,
+        learner = momentum_sgd(z.parameters, lr_schedule, momentum_schedule,
                                 gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                                 gradient_clipping_with_truncation=gradient_clipping_with_truncation)
         trainer = Trainer(z, (cross_entropy, error), learner)
