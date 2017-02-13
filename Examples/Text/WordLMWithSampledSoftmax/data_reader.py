@@ -34,7 +34,7 @@ class DataReader(object):
 
         self.segment_sepparator_id = self.token_to_id[segment_sepparator_token]
 
-    # Creates a generator that reads the whole input file and returns mini-batch data as a pair of input_sequences, label_sequences.
+    # Creates a generator that reads the whole input file and returns mini-batch data as a triple of input_sequences, label_sequences and number of read tokens.
     # Each individual sequence is constructed from one ore more full text lines until the minimal sequence length is reached or surpassed.
     def minibatch_generator(
         self,
@@ -46,6 +46,7 @@ class DataReader(object):
             token_ids = []
             feature_sequences = []
             label_sequences = []
+            token_count = 0
 
             for line in text_file:
                 tokens = line.split()
@@ -59,6 +60,8 @@ class DataReader(object):
                         sys.exit()
                     token_ids.append(self.token_to_id[token])
 
+                token_count += len(tokens)
+
                 # When minimum sequence length is reached, create feature and label sequence from it.
                 if len(token_ids) >= sequence_length:
                     # We prepend a segment separator before the feature segments
@@ -68,15 +71,14 @@ class DataReader(object):
 
                 # When the expected number of sequences per batch is reached yield the data and reset the array
                 if len(feature_sequences) == sequences_per_batch:
-                    yield C.one_hot(feature_sequences, self.vocab_dim), C.one_hot(label_sequences, self.vocab_dim)
+                    yield C.one_hot(feature_sequences, self.vocab_dim), C.one_hot(label_sequences, self.vocab_dim), token_count
                     feature_sequences = []
                     label_sequences   = []
+                    token_count = 0
 
             # From the end of the file there are probably some leftover lines
             if len(feature_sequences) > 0:
-                yield C.one_hot(feature_sequences, self.vocab_dim), C.one_hot(label_sequences, self.vocab_dim)
-                feature_sequences = []
-                label_sequences   = []
+                yield C.one_hot(feature_sequences, self.vocab_dim), C.one_hot(label_sequences, self.vocab_dim), token_count
 
 
 

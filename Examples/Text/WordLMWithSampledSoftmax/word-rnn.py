@@ -28,7 +28,6 @@ num_layers = 2
 num_epochs = 10
 sequence_length = 40
 sequences_per_batch = 10
-minibatch_size = sequence_length * sequences_per_batch
 alpha = 0.75
 learning_rate = 0.002
 softmax_sample_size = 500
@@ -77,7 +76,7 @@ def cross_entropy_with_sampled_softmax(
     hidden_dim,              # Dimension of the hidden vector
     num_samples,             # Number of samples to use for sampled softmax
     sampling_weights,        # Node providing weights to be used for the weighted sampling
-    allow_duplicates = False # Boolean flag to control wheather to use sampling with replacemement (allow_duplicates == True) or without replacement.
+    allow_duplicates = False # Boolean flag to control whether to use sampling with replacement (allow_duplicates == True) or without replacement.
     ):
     bias = C.Parameter(shape = (vocab_dim, 1), init = C.init_bias_default_or_0)
     weights = C.Parameter(shape = (vocab_dim, hidden_dim), init = C.init_default_or_glorot_uniform)
@@ -124,7 +123,7 @@ def cross_entropy_with_sampled_softmax(
 def average_cross_entropy(full_cross_entropy_node, input_node, label_node, data):
     count = 0
     ce_sum = 0
-    for features, labels in data.minibatch_generator(validation_file_path, sequence_length, sequences_per_batch):
+    for features, labels, _ in data.minibatch_generator(validation_file_path, sequence_length, sequences_per_batch):
         arguments = ({input_node : features, label_node : labels})
         full_cross_entropy = full_cross_entropy_node.eval(arguments)
         for ce_list in full_cross_entropy:
@@ -215,14 +214,14 @@ def train_lm():
                                 gradient_clipping_with_truncation=gradient_clipping_with_truncation)
         trainer = Trainer(z, (cross_entropy, error), learner)
   
-        for features, labels in data.minibatch_generator(train_file_path, sequence_length, sequences_per_batch):
+        for features, labels, token_count in data.minibatch_generator(train_file_path, sequence_length, sequences_per_batch):
             arguments = ({input_sequence : features, label_sequence : labels})
 
             t_start = timeit.default_timer()
             trainer.train_minibatch(arguments)
             t_end =  timeit.default_timer()
 
-            samples_per_second = minibatch_size / (t_end - t_start)
+            samples_per_second = token_count / (t_end - t_start)
 
             # Print progress report every num_samples_between_progress_report samples
 
@@ -231,8 +230,8 @@ def train_lm():
                 print_progress(samples_per_second, av_ce, num_trained_samples, t_start)
                 num_trained_samples_since_last_report = 0
 
-            num_trained_samples += minibatch_size
-            num_trained_samples_since_last_report += minibatch_size
+            num_trained_samples += token_count
+            num_trained_samples_since_last_report += token_count
 
         # after each epoch save the model
         model_filename = "models/lm_epoch%d.dnn" % epoch_count
