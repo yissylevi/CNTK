@@ -14,7 +14,7 @@ from cntk.ops import input_variable, cross_entropy_with_softmax, classification_
 from cntk.ops.functions import load_model
 from cntk.blocks import LSTM, Stabilizer
 from cntk.layers import Recurrence, Dense
-from cntk.models import LayerStack, Sequential
+from cntk.models import For, Sequential
 from cntk.utils import log_number_of_parameters, ProgressPrinter
 from data_reader import DataReader
 from math import log, exp
@@ -34,7 +34,7 @@ learning_rate = 0.002
 softmax_sample_size = 500
 clipping_threshold_per_sample = 5.0
 token_to_id_path        = './ptb/token2id.txt'
-validation_file_path    = './ptb/valid_small.txt'
+validation_file_path    = './ptb/valid.txt'
 train_file_path         = './ptb/train.txt'
 token_frequencies_file_path = './ptb/freq.txt'
 segment_sepparator = '<eos>'
@@ -64,7 +64,7 @@ def cross_entropy_with_full_softmax(
 
     z = C.reshape( C.times_transpose(weights, hidden_vector) + bias, (1,vocab_dim))
     zT = C.times_transpose(z, target_vector)
-    ce = C.reduce_log_sum(z) - zT
+    ce = C.reduce_log_sum_exp(z) - zT
     zMax = C.reduce_max(z)
     error_on_samples = C.less(zT, zMax)
     return (z, ce, error_on_samples)
@@ -106,11 +106,11 @@ def cross_entropy_with_sampled_softmax(
     zT = C.times_transpose(wT, hidden_vector, name='zT1') + C.times(target_vector, bias, name='zT2') - C.times_transpose(target_vector, log_prior, name='zT3') # [1]
 
 
-    zSReduced = C.reduce_log_sum(zS)
+    zSReduced = C.reduce_log_sum_exp(zS)
 
     # Compute the cross entropy that is used for training.
-    # We don't check whether any of the classes in the random samples conincides with the true label, so it might happen that the true class is counted
-    # twice in the normalising demnominator of sampled softmax.
+    # We don't check whether any of the classes in the random samples coincides with the true label, so it might happen that the true class is counted
+    # twice in the normalizing denominator of sampled softmax.
     cross_entropy_on_samples = C.log_add_exp(zT, zSReduced) - zT
 
     # For applying the model we also output a node providing the input for the full softmax
@@ -136,9 +136,9 @@ def average_cross_entropy(full_cross_entropy_node, input_node, label_node, data)
 def create_model(input_sequence, label_sequence, vocab_dim, hidden_dim):
     # Create the rnn that computes the latent representation for the next token.
     rnn_with_latent_output = Sequential([
-        C.Embedding(hidden_dim),      
-        LayerStack(num_layers, lambda: 
-                   Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)]))
+        C.Embedding(hidden_dim),   
+        For(range(num_layers), lambda: 
+            Sequential([Stabilizer(), Recurrence(LSTM(hidden_dim), go_backwards=False)])),
         ])
 
     
@@ -150,11 +150,11 @@ def create_model(input_sequence, label_sequence, vocab_dim, hidden_dim):
         weights = load_sampling_weights(token_frequencies_file_path)
         smoothed_weights = np.float32( np.power(weights, alpha))
         sampling_weights = C.reshape(C.Constant(smoothed_weights), shape = (1,vocab_dim))
-        softmax_input, ce, errs = cross_entropy_with_sampled_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim, softmax_sample_size, sampling_weights)
+        z, ce, errs = cross_entropy_with_sampled_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim, softmax_sample_size, sampling_weights)
     else:
-        softmax_input, ce, errs = cross_entropy_with_full_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim)
+        z, ce, errs = cross_entropy_with_full_softmax(latent_vector, label_sequence, vocab_dim, hidden_dim)
 
-    return softmax_input, ce, errs
+    return z, ce, errs
 
 
 # Creates model inputs
@@ -188,15 +188,15 @@ def train_lm():
     # Create model nodes for the source and target inputs
     input_sequence, label_sequence = create_inputs(data.vocab_dim)
 
-    # Create the model. In has three output nodes
-    # softmax_input: this provides the latent representation of the next token
+    # Create the model. It has three output nodes
+    # z: the input to softmax that  provides the latent representation of the next token
     # cross_entropy: this is used training criterion
     # error: this a binary indicator if the model predicts the correct token
-    softmax_input, cross_entropy, error = create_model(input_sequence, label_sequence, data.vocab_dim, hidden_dim)
-    full_ce = C.cross_entropy_with_softmax(softmax_input, label_sequence)
+    z, cross_entropy, error = create_model(input_sequence, label_sequence, data.vocab_dim, hidden_dim)
+    full_ce = C.cross_entropy_with_softmax(z, label_sequence)
 
     # print out some useful training information
-    log_number_of_parameters(softmax_input) ; print()
+    log_number_of_parameters(z) ; print()
     
     # Run the training loop
     num_trained_samples = 0
@@ -210,10 +210,10 @@ def train_lm():
         lr_per_sample = learning_rate_schedule(lr, UnitType.sample)
         momentum_time_constant = momentum_as_time_constant_schedule(10000)
         gradient_clipping_with_truncation = True
-        learner = momentum_sgd(softmax_input.parameters, lr_per_sample, momentum_time_constant,
+        learner = momentum_sgd(z.parameters, lr_per_sample, momentum_time_constant,
                                 gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
                                 gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-        trainer = Trainer(softmax_input, cross_entropy, error, learner)
+        trainer = Trainer(z, (cross_entropy, error), learner)
   
         for features, labels in data.minibatch_generator(train_file_path, sequence_length, sequences_per_batch):
             arguments = ({input_sequence : features, label_sequence : labels})
@@ -236,14 +236,11 @@ def train_lm():
 
         # after each epoch save the model
         model_filename = "models/lm_epoch%d.dnn" % epoch_count
-        softmax_input.save_model(model_filename)
+        z.save_model(model_filename)
         print("Saved model to '%s'" % model_filename)
 
 
 if __name__=='__main__':
     import _cntk_py
-    _cntk_py.disable_gradient_accumulation_optimization()
-
-
     # train the LM
     train_lm()

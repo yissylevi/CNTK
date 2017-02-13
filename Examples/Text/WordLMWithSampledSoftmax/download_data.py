@@ -50,12 +50,17 @@ def write_vocab_and_frequencies(word2count, vocab_file_path, freq_file_path, wor
     word2count_file.close()
 
 #copy txt file and append '<eos>' at end of each line
-def append_eos(from_path, to_path):
+def append_eos_and_trim(from_path, to_path, max_lines_in_output = None):
     with open(from_path,'r') as f:
         lines = f.read().splitlines()
 
     with open(to_path,'w') as f:
+        count=0
         for line in lines:
+            count += 1
+            if max_lines_in_output != None and count > max_lines_in_output:
+                break
+
             f.write(line + "<eos>\n")
 
 
@@ -100,9 +105,9 @@ if __name__=='__main__':
 
     print('creating final data files in directory:' + Paths.data_dir)
     os.mkdir(Paths.data_dir)
-    append_eos(os.path.join(Paths.tmp_dir, Paths.tar_path_test),       Paths.test)
-    append_eos(os.path.join(Paths.tmp_dir, Paths.tar_path_train),      Paths.train)
-    append_eos(os.path.join(Paths.tmp_dir, Paths.tar_path_validation), Paths.validation)
+    append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_test),       Paths.test)
+    append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_train),      Paths.train)
+    append_eos_and_trim(os.path.join(Paths.tmp_dir, Paths.tar_path_validation), Paths.validation, max_lines_in_output = 10)
 
     fileReader.close()
 
