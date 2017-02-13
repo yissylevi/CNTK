@@ -28,16 +28,16 @@ cp -R $TEST_DIR/../../../UnitTests/V2LibraryTests/data/* $TestDataDir || exit $?
 
 # Train model that is used by LoadLegacyModel tests.
 # Setup predefined variables $DataDir, $ConfigDir, and $OutputDir that are required by cntkrun
-ConfigDir=$TEST_ROOT_DIR/../../Examples/Speech/AN4/Config
-OutputDir=$ConfigDir/../Output
-DataDir=$ConfigDir/../Data
-
-[ -d $OutputDir ] || mkdir $OutputDir || exit $?
-[ -d $OutputDir/Models ] && rm -rf $OutputDir/Models
-DeleteModelsAfterTest=0
-[ -f $ConfigDir/FeedForward.cntk ] || exit 1
-cntkrun FeedForward.cntk "stderr=- command=speechTrain parallelTrain=false speechTrain=[SGD=[maxEpochs=1]]" || exit $?
-cp $OutputDir/Models/cntkSpeechFF.dnn $TestDataDir || exit $?
+#ConfigDir=$TEST_ROOT_DIR/../../Examples/Speech/AN4/Config
+#OutputDir=$ConfigDir/../Output
+#DataDir=$ConfigDir/../Data
+#
+#[ -d $OutputDir ] || mkdir $OutputDir || exit $?
+#[ -d $OutputDir/Models ] && rm -rf $OutputDir/Models
+#DeleteModelsAfterTest=0
+#[ -f $ConfigDir/FeedForward.cntk ] || exit 1
+#cntkrun FeedForward.cntk "stderr=- command=speechTrain parallelTrain=false speechTrain=[SGD=[maxEpochs=1]]" || exit $?
+#cp $OutputDir/Models/cntkSpeechFF.dnn $TestDataDir || exit $?
 
 # Set CUDA_VISIBLE_DEVICES to exclude all gpu if running on cpu device
 if [ "$TEST_DEVICE" == "cpu" ]; then
@@ -49,8 +49,8 @@ pushd $TestDataDir
 # Note: Run the device selection tests first since later tests may interfere with
 # device selection by freezing default device
 if [ "$OS" == "Windows_NT" ]; then
-  $TEST_BIN_DIR/V2LibraryTests.exe --report_level=detailed --run_test=DeviceSelectionSuite
-  $TEST_BIN_DIR/V2LibraryTests.exe --report_level=detailed --run_test=!DeviceSelectionSuite
+  $TEST_BIN_DIR/V2LibraryTests.exe --report_level=detailed --run_test=FeedForwardSuite/ReduceableTransposeTimesInCPU
+
 else
   $TEST_BIN_DIR/v2librarytests --report_level=detailed --run_test=DeviceSelectionSuite
   $TEST_BIN_DIR/v2librarytests --report_level=detailed --run_test=!DeviceSelectionSuite
