@@ -115,30 +115,11 @@ namespace CNTK
     /*virtual*/ Function::~Function() {}
 
     BackPropStatePtr Function::Forward(const std::unordered_map<Variable, ValuePtr>& arguments,
-                                       std::unordered_map<Variable, ValuePtr>& rawOutputs,
+                                       std::unordered_map<Variable, ValuePtr>& outputs,
                                        const DeviceDescriptor& computeDevice,
-                                       const std::unordered_set<Variable>& rawOutputsToRetainBackwardStateFor,
+                                       const std::unordered_set<Variable>& outputsToRetainBackwardStateFor,
                                        const std::unordered_set<Variable>& inputsToExcludeGradientsFor)
     {
-        // Sanitize outputs:
-        // Make sure we no not use any output owners to remove cyclic references.
-        std::unordered_map<Variable, ValuePtr> outputs;
-        for (const auto& o : rawOutputs)
-        {
-            auto sanitized = o.first;
-            sanitized.m_outputComposite = nullptr;
-            outputs.insert(make_pair(sanitized, o.second));
-        }
-
-        // Similar for outputs with backward state.
-        std::unordered_set<Variable> outputsToRetainBackwardStateFor;
-        for (const auto& o : rawOutputsToRetainBackwardStateFor)
-        {
-            Variable sanitized = o;
-            sanitized.m_outputComposite = nullptr;
-            outputsToRetainBackwardStateFor.insert(sanitized);
-        }
-
         auto compositeFunction = dynamic_cast<CompositeFunction*>(this);
         if (compositeFunction)
             return compositeFunction->Forward(arguments, outputs, computeDevice, outputsToRetainBackwardStateFor, inputsToExcludeGradientsFor);

@@ -932,13 +932,29 @@ namespace CNTK
         return computationNodePtr;
     }
 
+    std::unordered_set<Variable> CompositeFunction::Sanitize(const std::unordered_set<Variable>& outputs)
+    {
+        std::unordered_set<Variable> result;
+        for (auto& o : outputs)
+        {
+            Variable sanitized = o;
+            sanitized.m_outputComposite = nullptr;
+            result.insert(sanitized);
+        }
+
+        return result;
+    }
+
     template <typename ElementType>
     ComputationNetworkPtr CompositeFunction::GetComputationNetwork(const DeviceDescriptor& device,
-                                                                   const std::unordered_set<Variable>& backpropRoots,
-                                                                   const std::unordered_set<Variable>& outputs,
+                                                                   const std::unordered_set<Variable>& rawBackpropRoots,
+                                                                   const std::unordered_set<Variable>& rawOutputs,
                                                                    const std::unordered_set<Variable>& inputsToExcludeGradientsFor,
                                                                    bool allocateNetworkMatrices)
     {
+        auto outputs = Sanitize(rawOutputs);
+        auto backpropRoots = Sanitize(rawBackpropRoots);
+
         if (m_computationNetwork != nullptr)
         {
             // TODO: We should either invalidate and readapt the network if he backpropRoots change compared to what was specified when the network
@@ -1008,7 +1024,7 @@ namespace CNTK
 
             // If any of the function or requested outputs is not a root node, we need to explicitly
             // add it to the 'output' group of the ComputationNetwork
-            std::unordered_set<Variable> networkOutputs(outputs);
+            std::unordered_set<Variable> networkOutputs(Sanitize(outputs));
             networkOutputs.insert(rootFunctionOutputs.begin(), rootFunctionOutputs.end());
             for (auto output : networkOutputs)
             {
@@ -1340,7 +1356,7 @@ namespace CNTK
     /*virtual*/ BackPropStatePtr CompositeFunction::Forward(const std::unordered_map<Variable, ValuePtr>& arguments,
                                                             std::unordered_map<Variable, ValuePtr>& outputs,
                                                             const DeviceDescriptor& computeDevice,
-                                                            const std::unordered_set<Variable>& outputsToRetainBackwardStateFor,
+                                                            const std::unordered_set<Variable>& rawOutputsToRetainBackwardStateFor,
                                                             const std::unordered_set<Variable>& inputsToExcludeGradientsFor)
     {
         // Validate arguments and outputs
@@ -1371,6 +1387,12 @@ namespace CNTK
         for (auto output : outputs)
             requestedOutputVariables.insert(output.first);
 
+        // Because comosite function remembers them,
+        // make sure the outputs are sanitized to get break
+        // possibly cyclic references in the graph.
+        requestedOutputVariables = Sanitize(requestedOutputVariables);
+        auto outputsToRetainBackwardStateFor = Sanitize(rawOutputsToRetainBackwardStateFor);
+
         if (dataType == DataType::Float)
             GetComputationNetwork<float>(computeDevice, outputsToRetainBackwardStateFor, requestedOutputVariables, inputsToExcludeGradientsFor, true);
         else if (dataType == DataType::Double)
@@ -1381,12 +1403,12 @@ namespace CNTK
         std::unordered_set<Variable> functionOutputs(m_outputs.begin(), m_outputs.end());
         std::vector<ComputationNodeBasePtr> outputsToEvaluate;
         std::unordered_set<Variable> requiredArguments;
-        for (auto outputVarValuePair : outputs)
+        for (auto outputVarValuePair : requestedOutputVariables)
         {
-            auto& requiredArgumentsForCurrentOutput = GetArgumentDependencies(outputVarValuePair.first);
+            auto& requiredArgumentsForCurrentOutput = GetArgumentDependencies(outputVarValuePair);
             requiredArguments.insert(requiredArgumentsForCurrentOutput.begin(), requiredArgumentsForCurrentOutput.end());
 
-            auto outputComputationNode = m_variableToNodeMap.at(outputVarValuePair.first);
+            auto outputComputationNode = m_variableToNodeMap.at(outputVarValuePair);
             outputsToEvaluate.push_back(outputComputationNode);
         }
 
