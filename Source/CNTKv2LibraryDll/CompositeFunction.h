@@ -258,6 +258,7 @@ namespace CNTK
         void GetNetworkOutputs(std::unordered_map<Variable, ValuePtr>& outputs);
         void GetNetworkGradients(std::unordered_map<Variable, ValuePtr>& gradients);
 
+        // Remove cyclic references for composite nodes
         static std::unordered_set<Variable> CompositeFunction::Sanitize(const std::unordered_set<Variable>& outputs);
 
         const std::vector<Variable>& GetArgumentDependencies(const Variable& output);
