@@ -206,15 +206,15 @@ namespace CNTK
     void TrainingSession::CrossValidate(size_t currentIndex, const DeviceDescriptor& computeDevice)
     {
         std::unordered_map<Variable, ValuePtr> minibatch;
-        double error;
 
         auto checkpoint = m_crossValidationSource->GetCheckpointState();
         size_t sampleCount = 0;
         while(GetCrossValidationMinibatch(minibatch, m_crossValidationSchedule[sampleCount], computeDevice), !minibatch.empty())
         {
             OnCrossValidationMinibatchStart();
-            error = m_trainer->TestMinibatch(minibatch, computeDevice, sampleCount);
-            OnCrossValidationMinibatchEnd(currentIndex, error, sampleCount);
+            m_trainer->TestMinibatch(minibatch, computeDevice);
+            sampleCount = m_trainer->PreviousTestMinibatchSampleCount();
+            OnCrossValidationMinibatchEnd();
         }
         m_crossValidationSource->RestoreFromCheckpoint(checkpoint);
 

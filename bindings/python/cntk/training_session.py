@@ -126,23 +126,29 @@ class TrainingSession(cntk_py.TrainingSession):
         '''
         Callback that gets executed at the end of each minibatch.
         '''
-        # Only log progress if the trainer did not do it yet.
-        if self.trainer.progress_writers:
+        if (self.trainer.progress_writers or
+            self.trainer.total_number_of_samples_seen == 0 or self.trainer.previous_minibatch_sample_count == 0):
+            # Only log progress if the trainer did not do it yet and there is something to log.
             return
 
-        if (self.trainer.total_number_of_samples_seen != 0 and self.trainer.previous_minibatch_sample_count != 0):
-            for progress_writer in self.progress_writers:
-                progress_writer.update_training(
-                    self.trainer.previous_minibatch_sample_count,
-                    self.trainer.previous_minibatch_loss_average,
-                    self.trainer.previous_minibatch_evaluation_average)
+        for progress_writer in self.progress_writers:
+            progress_writer.update_training(
+                self.trainer.previous_minibatch_sample_count,
+                self.trainer.previous_minibatch_loss_average,
+                self.trainer.previous_minibatch_evaluation_average)
 
-    def on_cross_validation_minibatch_end(self, index, average_error, number_of_samples):
+    def on_cross_validation_minibatch_end(self):
         '''
         Callback that gets executed at the end of each cross-validation minibatch.
         '''
+        if self.trainer.progress_writers or self.trainer.previous_test_minibatch_sample_count == 0:
+            # Only log progress if the trainer did not do it yet and there is something to log.
+            return
+
         for progress_writer in self.progress_writers:
-            progress_writer.update_cross_validation(number_of_samples, average_error)
+            progress_writer.update_test(
+                self.trainer.previous_test_minibatch_sample_count,
+                self.trainer.previous_test_minibatch_evaluation_average)
 
     def on_progress(self, index):
         '''
@@ -161,10 +167,8 @@ class TrainingSession(cntk_py.TrainingSession):
         Args:
             index (int): index of the current callback.
         '''
-        # Only log progress if the trainer did not do it yet.
-        if not self.trainer.progress_writers:
-            for progress_writer in self.progress_writers:
-                progress_writer.write_cross_validation_summary()
+        for progress_writer in self.progress_writers:
+            progress_writer.write_test_summary()
 
 
 @typemap

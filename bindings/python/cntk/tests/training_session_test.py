@@ -97,11 +97,11 @@ class MockProgressWriter:
     def write_training_summary(self, with_metric):
         self.training_summary_counter += 1
 
-    def update_cross_validation(self, samples, avg_metric):
+    def update_test(self, samples, avg_metric):
         self.cv_error += avg_metric * samples
         self.cv_samples += samples
 
-    def write_cross_validation_summary(self):
+    def write_test_summary(self):
         assert (self.expected_cv[self.cv_summary_counter][0] == float(self.cv_error / self.cv_samples * 100))
         assert (self.expected_cv[self.cv_summary_counter][1] == int(self.cv_samples))
 

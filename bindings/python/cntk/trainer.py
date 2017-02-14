@@ -158,8 +158,12 @@ class Trainer(cntk_py.Trainer):
             device = use_default_device()
         arguments = sanitize_var_map(self.model.arguments, arguments)
 
-        # TODO: update progress_writers
-        return super(Trainer, self).test_minibatch(arguments, device)
+        result = super(Trainer, self).test_minibatch(arguments, device)
+
+        for progress_writer in self._progress_writers:
+            progress_writer.update_test(self.previous_test_minibatch_sample_count, result)
+
+        return result
 
     def save_checkpoint(self, filename, external_state={}):
         '''
@@ -242,6 +246,20 @@ class Trainer(cntk_py.Trainer):
         The number of samples seen globally between all workers from the beginning of training.
         '''
         return super(Trainer, self).total_number_of_samples_seen()
+
+    @property
+    def previous_test_minibatch_evaluation_average(self):
+        '''
+        The average evaluation criterion value per sample for the last minibatch tested
+        '''
+        return super(Trainer, self).previous_test_minibatch_evaluation_average()
+
+    @property
+    def previous_test_minibatch_sample_count(self):
+        '''
+        The number of samples in the last minibatch tested
+        '''
+        return super(Trainer, self).previous_test_minibatch_sample_count()
 
     @property
     def progress_writers(self):

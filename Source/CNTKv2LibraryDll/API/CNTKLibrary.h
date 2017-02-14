@@ -4116,6 +4116,16 @@ namespace CNTK
         size_t PreviousMinibatchSampleCount() const { return m_prevMinibatchNumSamples; }
 
         ///
+        /// Returns the average evaluation criterion value per sample for the last minibatch tested.
+        ///
+        CNTK_API double PreviousTestMinibatchEvaluationAverage() const;
+
+        ///
+        /// Returns the number of samples in the last test minibatch.
+        ///
+        size_t PreviousTestMinibatchSampleCount() const { return m_prevTestMinibatchNumSamples; }
+
+        ///
         /// Learners associated with this Trainer for updating the model's parameters using computed gradients.
         ///
         CNTK_API const std::vector<LearnerPtr>& ParameterLearners() const;
@@ -4128,12 +4138,6 @@ namespace CNTK
     private:
         template <typename T1, typename ...CtorArgTypes>
         friend std::shared_ptr<T1> MakeSharedObject(CtorArgTypes&& ...ctorArgs);
-
-        friend class TrainingSession;
-
-        // Returns aggregated evaluation criterion value and sample count.
-        // TODO: change the public interface to return pair(error, sampleCount) instead of average error.
-        double TestMinibatch(const std::unordered_map<Variable, ValuePtr>& arguments, const DeviceDescriptor& computeDevice, size_t& sampleCount);
 
         Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const std::vector<LearnerPtr>& parameterLearners);
         Trainer(const FunctionPtr& model, const FunctionPtr& lossFunction, const FunctionPtr& evaluationFunction, const std::vector<LearnerPtr>& parameterLearners);
@@ -4166,6 +4170,9 @@ namespace CNTK
         size_t   m_prevMinibatchNumSamples;
         ValuePtr m_prevMinibatchAggregateTrainingLossValue;
         ValuePtr m_prevMinibatchAggregateEvalCriterionValue;
+
+        size_t   m_prevTestMinibatchNumSamples;
+        ValuePtr m_prevTestMinibatchAggregateEvalCriterionValue;
     };
 
     ///
@@ -4597,7 +4604,7 @@ namespace CNTK
         ///
         /// Optionally overridable callback that is invoked after each cross validation minibatch.
         ///
-        CNTK_API virtual void OnCrossValidationMinibatchEnd(size_t /*validationIndex*/, double /*averageError*/, size_t /*numberOfSamples*/) {};
+        CNTK_API virtual void OnCrossValidationMinibatchEnd() {};
 
         ///
         /// Optionally overridable callback that is invoked before each cross validation.

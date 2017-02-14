@@ -9,7 +9,7 @@ import time
 
 
 class _Progress(object):
-    # Private class. Facilitates tracking training/cross-validation progress.
+    # Private class. Facilitates tracking training/test progress.
 
     def __init__(self, write_frequency, write_first_n):
         if (write_frequency is not None) and (write_frequency < 0):
@@ -108,9 +108,9 @@ class BaseProgressWriter(object):
     '''Parent of all classes that want to record training progress. Cannot be used directly.'''
 
     def __init__(self, training_write_frequency=None, training_write_first_n=0,
-                 cv_write_frequency=None, cv_write_first_n=0):
+                 test_write_frequency=None, test_write_first_n=0):
         self.training = _Progress(training_write_frequency, training_write_first_n)
-        self.cv = _Progress(cv_write_frequency, cv_write_first_n)
+        self.test = _Progress(test_write_frequency, test_write_first_n)
 
     def update_training(self, samples, avg_loss, avg_metric=None):
         '''
@@ -126,17 +126,17 @@ class BaseProgressWriter(object):
             with_metric = avg_metric is not None
             self._write_training_update(*data, with_metric=with_metric)
 
-    def update_cross_validation(self, samples, avg_metric):
+    def update_test(self, samples, avg_metric):
         '''
-        Updates the writer with the recent cross-validation results.
+        Updates the writer with the recent test results.
 
         Args:
-            samples (`int`): number of samples used in training since the last call to this function.
+            samples (`int`): number of samples used in testing since the last call to this function.
             avg_metric (`float`): average value of a metric per sample.
         '''
-        data = self.cv.update(samples, 0, avg_metric)
+        data = self.test.update(samples, 0, avg_metric)
         if data:
-            self._write_cv_update(*data)
+            self._write_test_update(*data)
 
     def write_training_summary(self, with_metric=False):
         '''
@@ -148,15 +148,15 @@ class BaseProgressWriter(object):
         '''
         return self._write_training_summary(*self.training.reset_start(), with_metric=with_metric)
 
-    def write_cross_validation_summary(self):
-        '''Write a summary of cross validation progress since the last call to this function.'''
-        return self._write_cv_summary(*self.cv.reset_start())
+    def write_test_summary(self):
+        '''Write a summary of test progress since the last call to this function.'''
+        return self._write_test_summary(*self.test.reset_start())
 
     def _write_training_update(self, samples, avg_loss, avg_metric, first_mb, with_metric):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
-    def _write_cv_update(self, samples, avg_loss, avg_metric, first_mb):
+    def _write_test_update(self, samples, avg_loss, avg_metric, first_mb):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
@@ -164,7 +164,7 @@ class BaseProgressWriter(object):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
-    def _write_cv_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
+    def _write_test_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
         # To be overriden in derived classes.
         raise NotImplementedError('Attempting to use an abstract BaseProgressWriter class')
 
@@ -184,7 +184,7 @@ class ProgressPrinter(BaseProgressWriter):
     '''
 
     def __init__(self, freq=None, first=0, tag='', log_to_file=None, rank=None, gen_heartbeat=False, num_epochs=300,
-                 cv_write_frequency=None, cv_write_first_n=0):
+                 test_write_frequency=None, test_write_first_n=0):
         '''
         Constructor.
 
@@ -203,12 +203,12 @@ class ProgressPrinter(BaseProgressWriter):
             gen_heartbeat (`bool`, default `False`): If True output a progress message every 10 seconds or so to stdout.
             num_epochs (`int`, default 300): The total number of epochs to be trained.  Used for some metadata.
               This parameter is optional.
-            cv_write_frequency (`int` or `None`, default `None`): similar to ``freq``, but applies to
-              printing intermediate cross validation results.
-            cv_write_first_n (`int`, default 0): similar to ``first``, but applies to printing intermediate
-              cross validation results.
+            test_write_frequency (`int` or `None`, default `None`): similar to ``freq``, but applies to
+              printing intermediate test results.
+            test_first_n (`int`, default 0): similar to ``first``, but applies to printing intermediate
+              test results.
         '''
-        super(ProgressPrinter, self).__init__(freq, first, cv_write_frequency, cv_write_first_n)
+        super(ProgressPrinter, self).__init__(freq, first, test_write_frequency, test_write_first_n)
 
         self.tag = '' if not tag else "[{}] ".format(tag)
         self.progress_timer_time = 0
@@ -240,12 +240,11 @@ class ProgressPrinter(BaseProgressWriter):
 
     def end_progress_print(self, msg=""):
         '''
-        DEPRECATED. Prints the given message signifying the end of training.
+        Prints the given message signifying the end of training.
 
         Args:
             msg (`string`, default ''): message to print.
         '''
-        _warn_deprecated('The method was deprecated.')
         self._logprint('CNTKCommandTrainEnd: train')
         if msg != "" and self.log_to_file is not None:
             self._logprint(msg)
@@ -347,9 +346,9 @@ class ProgressPrinter(BaseProgressWriter):
         # Override for BaseProgressWriter._write_training_progress_update.
         self._write_progress_update(self.training, '', samples, avg_loss, avg_metric if with_metric else None, first_mb)
 
-    def _write_cv_update(self, samples, avg_loss, avg_metric, first_mb):
+    def _write_test_update(self, samples, avg_loss, avg_metric, first_mb):
         # Override for BaseProgressWriter._write_test_progress_update.
-        self._write_progress_update(self.cv, 'Cross Validation ', samples, avg_loss, avg_metric, first_mb)
+        self._write_progress_update(self.test, 'Test ', samples, avg_loss, avg_metric, first_mb)
 
     def _write_progress_update(self, progress, name, samples, avg_loss, avg_metric, first_mb):
         # Override for BaseProgressWriter._write_progress_update.
@@ -362,7 +361,7 @@ class ProgressPrinter(BaseProgressWriter):
             else:
                 self._logprint(' {:8.3g}   {:8.3g}   {:8s}   {:8s}    {:10d}'.format(
                     self.avg_loss_since_start(), avg_loss,
-                    '', '', self.cv.samples_since_start))
+                    '', '', self.test.samples_since_start))
         else:
             if avg_metric is not None:
                 self._logprint(' {}Minibatch[{:4d}-{:4d}]: loss = {:0.6f} * {:d}, metric = {:0.1f}% * {:d};'.format(
@@ -390,11 +389,11 @@ class ProgressPrinter(BaseProgressWriter):
         self._logprint(msg)
         return avg_loss, avg_metric, samples
 
-    def _write_cv_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
+    def _write_test_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
         # Override for BaseProgressWriter._write_training_summary.
         # Only log epoch summary when on arithmetic schedule.
         self._logprint("Cross Validation [{}]: Minibatch[1-{}]: errs = {:0.2f}% * {}".format(
-            self.cv.epochs, updates, avg_metric * 100, samples))
+            self.test.epochs, updates, avg_metric * 100, samples))
 
     def _logprint(self, logline):
         if self.log_to_file is None:
@@ -483,9 +482,9 @@ class TensorBoardProgressWriter(BaseProgressWriter):
         if with_metric:
             self.write_value('mb/avg_metric', avg_metric * 100.0, self.training.total_updates)
 
-    def _write_cv_update(self, samples, avg_loss, avg_metric, first_mb):
-        # Override for BaseProgressWriter._write_cv_update.
-        # It is not particularly useful to record per-minibatch cross-validation results in TensorBoard,
+    def _write_test_update(self, samples, avg_loss, avg_metric, first_mb):
+        # Override for BaseProgressWriter._write_test_update.
+        # It is not particularly useful to record per-minibatch test results in TensorBoard,
         # hence it is not currently supported.
         raise NotImplementedError(
             'TensorBoardProgressWriter does not support recording per-minibatch cross-validation results')
@@ -496,14 +495,14 @@ class TensorBoardProgressWriter(BaseProgressWriter):
         if with_metric:
             self.write_value('summary/avg_metric', avg_metric * 100.0, self.training.epochs)
 
-    def _write_cv_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
-        # Override for BaseProgressWriter._write_cv_summary.
+    def _write_test_summary(self, samples, updates, avg_loss, avg_metric, time_delta):
+        # Override for BaseProgressWriter._write_test_summary.
         if self.training.total_updates != 0:
-            # Record cross validation summary using training minibatches as a step.
-            # This allows to easier correlate the training and cv metric graphs in TensorBoard.
-            self.write_value('mb/cv_avg_metric', avg_metric * 100.0, self.training.total_updates)
+            # Record test summary using training minibatches as a step.
+            # This allows to easier correlate the training and test metric graphs in TensorBoard.
+            self.write_value('mb/test_avg_metric', avg_metric * 100.0, self.training.total_updates)
         else:
-            self.write_value('summary/cv_avg_metric', avg_metric * 100.0, self.cv.epochs)
+            self.write_value('summary/test_avg_metric', avg_metric * 100.0, self.test.epochs)
 
 # print the total number of parameters to log
 def log_number_of_parameters(model, trace_level=0):

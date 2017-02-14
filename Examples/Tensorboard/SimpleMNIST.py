@@ -95,6 +95,7 @@ def simple_mnist():
                 tensorboard_writer.write_value(p.uid + "/min", reduce_min(p).eval(), minibatch_idx)
                 tensorboard_writer.write_value(p.uid + "/mean", reduce_mean(p).eval(), minibatch_idx)
 
+    progress_printer.write_training_summary(with_metric=True)
     tensorboard_writer.close()
 
     # Load test data
@@ -123,6 +124,7 @@ def simple_mnist():
         test_result += trainer.test_minibatch(mb)
 
     # Average of evaluation errors of all test minibatches
+    progress_printer.write_test_summary()
     return test_result / num_minibatches_to_test
 
 if __name__ == '__main__':
