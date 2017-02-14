@@ -32,10 +32,10 @@ def test_word_rnn(device_id):
     W.learning_rate = 0.02
     W.momentum_as_time_constant = 5
     W.clipping_threshold_per_sample = 5.0
-    W.token_to_id_path        = './test/token2id.txt'
-    W.validation_file_path    = './test/text.txt'
-    W.train_file_path         = './test/text.txt'
-    W.token_frequencies_file_path = './test/freq.txt'
+    W.token_to_id_path        = 'test/token2id.txt'
+    W.validation_file_path    = 'test/text.txt'
+    W.train_file_path         = 'test/text.txt'
+    W.token_frequencies_file_path = 'test/freq.txt'
     W.segment_sepparator = '<eos>'
     W.num_samples_between_progress_report = 2
 
