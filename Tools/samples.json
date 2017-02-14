@@ -369,6 +369,14 @@
     },
     {
         "category": ["Text"],
+        "name":  "Word Based Language Model using Sampled Softmax",
+        "url":  "https://github.com/Microsoft/CNTK/tree/master/Examples/Text/WordLMWithSampledSoftmax",
+        "description":  "An example on how to use sampled softmax to train a neural language model.",
+        "language":  ["Python"],
+        "type":  ["Recipe"]
+    },
+    {
+        "category": ["Text"],
         "name":  "RNN LM on PennTreebank",
         "url":  "https://github.com/Microsoft/CNTK/tree/master/Examples/SequenceToSequence/PennTreebank",
         "description":  "Recurrent neural network for language modeling on the PennTreebank dataset.",
