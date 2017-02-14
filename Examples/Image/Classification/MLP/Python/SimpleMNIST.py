@@ -7,13 +7,13 @@
 import numpy as np
 import sys
 import os
-from cntk import Trainer
+from cntk import Trainer, training_session, minibatch_size_schedule
 from cntk.io import MinibatchSource, CTFDeserializer, StreamDef, StreamDefs, INFINITELY_REPEAT, FULL_DATA_SWEEP
 from cntk.device import cpu, set_default_device
 from cntk.learner import sgd, learning_rate_schedule, UnitType
 from cntk.ops import input_variable, cross_entropy_with_softmax, classification_error, relu, element_times, constant
 from cntk.layers import Dense
-from cntk.models import Sequential, LayerStack
+from cntk.models import Sequential, For
 from cntk.utils import ProgressPrinter
 
 abs_path = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +35,7 @@ def create_reader(path, is_training, input_dim, label_dim):
 
 # Creates and trains a feedforward classification model for MNIST images
 
-def simple_mnist(debug_output=False):
+def simple_mnist():
     input_dim = 784
     num_output_classes = 10
     num_hidden_layers = 1
@@ -48,7 +48,7 @@ def simple_mnist(debug_output=False):
     # Instantiate the feedforward classification model
     scaled_input = element_times(constant(0.00390625), input)
     z = Sequential([
-            LayerStack(num_hidden_layers, lambda i: Dense(hidden_layers_dim, activation=relu)),
+            For(range(num_hidden_layers), lambda i: Dense(hidden_layers_dim, activation=relu)),
             Dense(num_output_classes)])(scaled_input)
 
     ce = cross_entropy_with_softmax(z, label)
@@ -68,33 +68,30 @@ def simple_mnist(debug_output=False):
 
     lr_per_minibatch=learning_rate_schedule(0.2, UnitType.minibatch)
     # Instantiate the trainer object to drive the model training
-    trainer = Trainer(z, ce, pe, sgd(z.parameters, lr=lr_per_minibatch))
+    trainer = Trainer(z, (ce, pe), sgd(z.parameters, lr=lr_per_minibatch))
 
     # Get minibatches of images to train with and perform model training
     minibatch_size = 64
     num_samples_per_sweep = 60000
     num_sweeps_to_train_with = 10
-    num_minibatches_to_train = (num_samples_per_sweep * num_sweeps_to_train_with) / minibatch_size
-    training_progress_output_freq = 500
+    #training_progress_output_freq = 100
 
-    if debug_output:
-        training_progress_output_freq = training_progress_output_freq/4
+    progress_printer = ProgressPrinter(
+        #freq=training_progress_output_freq,
+        tag='Training',
+        num_epochs=num_sweeps_to_train_with)
 
-    pp = ProgressPrinter(training_progress_output_freq, num_epochs=num_sweeps_to_train_with)
-    epoch = 0
-    for i in range(0, int(num_minibatches_to_train)):
-        mb = reader_train.next_minibatch(minibatch_size, input_map=input_map)
-        trainer.train_minibatch(mb)
-        pp.update_with_trainer(trainer, with_metric=True)
-        new_epoch = int(trainer.total_number_of_samples_seen / num_samples_per_sweep);
-        if (new_epoch != epoch):
-            pp.epoch_summary(with_metric=True)
-            epoch = new_epoch
-
-    #print the last epoch
-    if pp.samples_since_start > 0:
-        pp.epoch_summary(with_metric=True)
-
+    session = training_session(
+        training_minibatch_source = reader_train,
+        trainer = trainer,
+        mb_size_schedule = minibatch_size_schedule(minibatch_size),
+        progress_printer = progress_printer,
+        model_inputs_to_mb_source_mapping = input_map,
+        progress_frequency = num_samples_per_sweep,
+        max_training_samples = num_samples_per_sweep * num_sweeps_to_train_with)
+	
+    session.train()
+    
     # Load test data
     path = os.path.normpath(os.path.join(data_dir, "Test-28x28_cntk_text.txt"))
     check_path(path)
