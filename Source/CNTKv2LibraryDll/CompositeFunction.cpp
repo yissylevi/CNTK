@@ -1396,6 +1396,8 @@ namespace CNTK
         std::unordered_set<Variable> functionOutputs(m_outputs.begin(), m_outputs.end());
         std::vector<ComputationNodeBasePtr> outputsToEvaluate;
         std::unordered_set<Variable> requiredArguments;
+
+        requestedOutputVariables = Sanitize(requestedOutputVariables);
         for (auto outputVarValuePair : requestedOutputVariables)
         {
             auto& requiredArgumentsForCurrentOutput = GetArgumentDependencies(outputVarValuePair);
