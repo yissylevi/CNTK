@@ -87,7 +87,7 @@ namespace CNTK
         return result;
     }
 
-    Variable Variable::NonOwnerPreservingCopy() const
+    Variable Variable::NonCompositePreservingCopy() const
     {
         Variable copy = *this;
         copy.m_outputComposite = nullptr;

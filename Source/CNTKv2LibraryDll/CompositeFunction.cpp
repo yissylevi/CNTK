@@ -932,12 +932,12 @@ namespace CNTK
         return computationNodePtr;
     }
 
-    std::unordered_set<Variable> CompositeFunction::Sanitize(const std::unordered_set<Variable>& outputs)
+    std::unordered_set<Variable> CompositeFunction::NonOwnerPreservingCopy(const std::unordered_set<Variable>& outputs)
     {
         std::unordered_set<Variable> result;
         for (auto& o : outputs)
         {
-            Variable sanitized = o.NonOwnerPreservingCopy();
+            Variable sanitized = o.NonCompositePreservingCopy();
             result.insert(sanitized);
         }
 
@@ -946,24 +946,24 @@ namespace CNTK
 
     template <typename ElementType>
     ComputationNetworkPtr CompositeFunction::GetComputationNetwork(const DeviceDescriptor& device,
-                                                                   const std::unordered_set<Variable>& rawBackpropRoots,
-                                                                   const std::unordered_set<Variable>& rawOutputs,
+                                                                   const std::unordered_set<Variable>& backpropRoots,
+                                                                   const std::unordered_set<Variable>& outputs,
                                                                    const std::unordered_set<Variable>& inputsToExcludeGradientsFor,
                                                                    bool allocateNetworkMatrices)
     {
         if (m_computationNetwork != nullptr)
         {
-            // TODO: We should either invalidate and readapt the network if the rawBackpropRoots change compared to what was specified when the network
+            // TODO: We should either invalidate and readapt the network if the backpropRoots change compared to what was specified when the network
             // was last constructed, to just recreate a new network.
-            // For now just disallow changing the rawBackpropRoots after the network is created
-            if (!rawBackpropRoots.empty() && (m_currentBackpropRoots != rawBackpropRoots))
+            // For now just disallow changing the backpropRoots after the network is created
+            if (!backpropRoots.empty() && (m_currentBackpropRoots != backpropRoots))
                 LogicError("Changing backprop roots across different Forward calls on a CNTK composite Function is currently unsupported");
 
             // TODO: Support changing the device across different invocations of the forward method on a Function instance
             if (AsDeviceDescriptor(m_computationNetwork->GetDeviceId()) != device)
                 LogicError("Changing device across different Forward calls on a CNTK composite Function is currently unsupported");
             
-            if (!rawBackpropRoots.empty() && (inputsToExcludeGradientsFor != m_inputsExcludedFromGradientComputation))
+            if (!backpropRoots.empty() && (inputsToExcludeGradientsFor != m_inputsExcludedFromGradientComputation))
                 LogicError("Changing the set of inputs to exclude from gradient computation, across different Forward calls on a CNTK composite Function, is currently unsupported");
         }
         else
@@ -978,12 +978,12 @@ namespace CNTK
                     InvalidArgument("Function::Forward: Only inputs of a Function can be excluded from gradient computation");
             }
 
-            m_inputsExcludedFromGradientComputation = inputsToExcludeGradientsFor;
+            m_inputsExcludedFromGradientComputation = NonOwnerPreservingCopy(inputsToExcludeGradientsFor);
 
             ComputationNetworkBuilder<ElementType> builder(*m_computationNetwork);
 
             // TODO: We currently only support one backprop root
-            if (rawBackpropRoots.size() > 1)
+            if (backpropRoots.size() > 1)
                 LogicError("More than one backprop roots is currently unsupported");
 
             auto placeholders = Placeholders();
@@ -1020,7 +1020,6 @@ namespace CNTK
 
             // If any of the function or requested outputs is not a root node, we need to explicitly
             // add it to the 'output' group of the ComputationNetwork
-            auto outputs = Sanitize(rawOutputs);
             std::unordered_set<Variable> networkOutputs(outputs);
             networkOutputs.insert(rootFunctionOutputs.begin(), rootFunctionOutputs.end());
             for (auto output : networkOutputs)
@@ -1036,7 +1035,7 @@ namespace CNTK
                 }
             }
 
-            m_currentBackpropRoots = Sanitize(rawBackpropRoots);
+            m_currentBackpropRoots = NonOwnerPreservingCopy(backpropRoots);
 
             // In case of recurrence, the inputs of some of the ComputationNodes are not attached due to cycles.
             // Now attach those after we have created all ComputationNodes in the network
@@ -1115,7 +1114,6 @@ namespace CNTK
                 forwardRootNodes.push_back(m_variableToNodeMap.at(rootOutput));
 
             std::vector<ComputationNodeBasePtr> forwardOutputNodes;
-            auto outputs = Sanitize(rawOutputs);
             for (auto output : outputs)
                 forwardOutputNodes.push_back(m_variableToNodeMap.at(output));
 
@@ -1131,7 +1129,6 @@ namespace CNTK
         {
             // Make sure the outputs requested are a subset of the outputs we setup the current matrix allocation structure
             // in the cached computation network
-            auto outputs = Sanitize(rawOutputs);
             for (auto output : outputs)
             {
                 auto computationNode = m_variableToNodeMap.at(output);
@@ -1332,10 +1329,12 @@ namespace CNTK
     {
         if (m_perOutputVarArgumentDependencies.find(output) == m_perOutputVarArgumentDependencies.end())
         {
-            if (output.IsOutput())
-                m_perOutputVarArgumentDependencies[output] = AsComposite(output.Owner())->Arguments();
+            auto sanitizedOutput = output.NonCompositePreservingCopy();
+
+            if (sanitizedOutput.IsOutput())
+                m_perOutputVarArgumentDependencies[sanitizedOutput] = AsComposite(sanitizedOutput.Owner())->Arguments();
             else
-                m_perOutputVarArgumentDependencies[output] = { output };
+                m_perOutputVarArgumentDependencies[sanitizedOutput] = { sanitizedOutput };
         }
 
         return m_perOutputVarArgumentDependencies[output];
@@ -1397,13 +1396,12 @@ namespace CNTK
         std::vector<ComputationNodeBasePtr> outputsToEvaluate;
         std::unordered_set<Variable> requiredArguments;
 
-        requestedOutputVariables = Sanitize(requestedOutputVariables);
-        for (auto outputVarValuePair : requestedOutputVariables)
+        for (auto outputVariable : requestedOutputVariables)
         {
-            auto& requiredArgumentsForCurrentOutput = GetArgumentDependencies(outputVarValuePair);
+            auto& requiredArgumentsForCurrentOutput = GetArgumentDependencies(outputVariable);
             requiredArguments.insert(requiredArgumentsForCurrentOutput.begin(), requiredArgumentsForCurrentOutput.end());
 
-            auto outputComputationNode = m_variableToNodeMap.at(outputVarValuePair);
+            auto outputComputationNode = m_variableToNodeMap.at(outputVariable);
             outputsToEvaluate.push_back(outputComputationNode);
         }
 
