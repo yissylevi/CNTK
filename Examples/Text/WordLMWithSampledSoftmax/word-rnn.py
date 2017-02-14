@@ -205,16 +205,17 @@ def train_lm():
     # Run the training loop
     num_trained_samples = 0
     num_trained_samples_since_last_report = 0
-    for epoch_count in range(num_epochs):
-        # Instantiate the trainer object to drive the model training
-        lr_schedule = learning_rate_schedule(learning_rate, UnitType.sample)
-        momentum_schedule = momentum_as_time_constant_schedule(momentum_as_time_constant)
-        gradient_clipping_with_truncation = True
-        learner = momentum_sgd(z.parameters, lr_schedule, momentum_schedule,
-                                gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
-                                gradient_clipping_with_truncation=gradient_clipping_with_truncation)
-        trainer = Trainer(z, (cross_entropy, error), learner)
+
+    # Instantiate the trainer object to drive the model training
+    lr_schedule = learning_rate_schedule(learning_rate, UnitType.sample)
+    momentum_schedule = momentum_as_time_constant_schedule(momentum_as_time_constant)
+    gradient_clipping_with_truncation = True
+    learner = momentum_sgd(z.parameters, lr_schedule, momentum_schedule,
+                            gradient_clipping_threshold_per_sample=clipping_threshold_per_sample,
+                            gradient_clipping_with_truncation=gradient_clipping_with_truncation)
+    trainer = Trainer(z, (cross_entropy, error), learner)
   
+    for epoch_count in range(num_epochs):
         for features, labels, token_count in data.minibatch_generator(train_file_path, sequence_length, sequences_per_batch):
             arguments = ({input_sequence : features, label_sequence : labels})
 
@@ -241,6 +242,5 @@ def train_lm():
 
 
 if __name__=='__main__':
-    import _cntk_py
     # train the LM
     train_lm()
