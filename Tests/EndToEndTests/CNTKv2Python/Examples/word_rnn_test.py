@@ -29,8 +29,8 @@ def test_word_rnn(device_id):
     W.sequence_length = 3
     W.sequences_per_batch = 2
     W.alpha = 0.75
-    W.learning_rate = 0.002
-    W.momentum_as_time_constant = 10000
+    W.learning_rate = 0.02
+    W.momentum_as_time_constant = 5
     W.clipping_threshold_per_sample = 5.0
     W.token_to_id_path        = './test/token2id.txt'
     W.validation_file_path    = './test/text.txt'
