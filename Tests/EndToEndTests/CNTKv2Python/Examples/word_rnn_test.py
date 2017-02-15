@@ -33,11 +33,11 @@ def test_word_rnn(device_id):
     W.segment_sepparator = '<eos>'
     W.num_samples_between_progress_report = 2
 
-    # Get path to data files
+    # Get path to data files.
     dir =  os.path.dirname( os.path.abspath(W.__file__))
-    W.token_to_id_path            = os.path.join(dir, 'test\\token2id.txt')
-    W.validation_file_path        = os.path.join(dir, 'test\\text.txt')
-    W.train_file_path             = os.path.join(dir, 'test\\text.txt')
-    W.token_frequencies_file_path = os.path.join(dir, 'test\\freq.txt')
+    W.token_to_id_path            = os.path.join(dir, 'test/token2id.txt')
+    W.validation_file_path        = os.path.join(dir, 'test/text.txt')
+    W.train_file_path             = os.path.join(dir, 'test/text.txt')
+    W.token_frequencies_file_path = os.path.join(dir, 'test/freq.txt')
 
     W.train_lm()
