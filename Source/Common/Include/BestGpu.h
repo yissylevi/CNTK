@@ -53,18 +53,12 @@ DEVICEID_TYPE DeviceFromConfig(const ScriptableObjects::IConfigRecord& config);
 // a lock on the selected GPU device.
 DEVICEID_TYPE GetBestDevice();
 
-// Releases previously held lock on the best GPU device, if the specified device id
-// is different from the best GPU id.
-void OnDeviceSelected(DEVICEID_TYPE deviceId);
-
 #else
 
 static inline DEVICEID_TYPE GetBestDevice()
 {
     return CPUDEVICE;
 }
-
-static inline void OnDeviceSelected(DEVICEID_TYPE) {}
 
 template <class ConfigRecordType>
 static inline DEVICEID_TYPE DeviceFromConfig(const ConfigRecordType& /*config*/)

@@ -12,56 +12,82 @@ namespace CNTK { namespace Test {
 
 BOOST_AUTO_TEST_SUITE(DeviceSelectionSuite)
 
+BOOST_AUTO_TEST_CASE(TestDefaultDeviceSelection)
+{
+    auto placeholderDefaultDevice = DeviceDescriptor::DefaultDevice();
+    BOOST_TEST((placeholderDefaultDevice.Type() == DeviceKind::AUTO));// default device is a placeholder
+
+    const auto& allDevices = DeviceDescriptor::AllDevices();
+    BOOST_TEST((find(allDevices.begin(), allDevices.end(), placeholderDefaultDevice) == allDevices.end()));
+
+    DeviceDescriptor::SetDefaultDevice(placeholderDefaultDevice); // nothing happens here
+    BOOST_TEST((DeviceDescriptor::DefaultDevice() == placeholderDefaultDevice)); // DefaultDevice() still returns a placeholder
+
+    auto actualDefaultDevice = DeviceDescriptor::UseDefaultDevice(); // At this point, a physical device is selected
+    BOOST_TEST((DeviceDescriptor::DefaultDevice() == actualDefaultDevice));
+    BOOST_TEST((actualDefaultDevice != placeholderDefaultDevice));
+    BOOST_TEST((find(allDevices.begin(), allDevices.end(), actualDefaultDevice) != allDevices.end()));
+}
+
 BOOST_AUTO_TEST_CASE(SetCpuDeviceAsDefault)
 {
     auto cpuDevice = DeviceDescriptor::CPUDevice();
-    DeviceDescriptor::SetDefaultDevice(cpuDevice);
 
+    DeviceDescriptor::SetDefaultDevice(cpuDevice);
     BOOST_TEST((DeviceDescriptor::DefaultDevice() == cpuDevice));
-}
-
-BOOST_AUTO_TEST_CASE(SetBestDeviceAsDefault)
-{
-    auto bestDevice = DeviceDescriptor::BestDevice();
-    DeviceDescriptor::SetDefaultDevice(bestDevice);
-
-    BOOST_TEST((DeviceDescriptor::DefaultDevice() == bestDevice));
-}
-
-BOOST_AUTO_TEST_CASE(UseCpuDeviceAsDefault)
-{
-    auto cpuDevice = DeviceDescriptor::CPUDevice();
-    auto bestDevice = DeviceDescriptor::BestDevice();
-
-    if (bestDevice != cpuDevice)
-    {
-        DeviceDescriptor::SetDefaultDevice(cpuDevice);
-    }
-
     BOOST_TEST((DeviceDescriptor::UseDefaultDevice() == cpuDevice));
-
-    if (DeviceDescriptor::DefaultDevice() != bestDevice)
-    {
-        VerifyException([&bestDevice]() {
-            DeviceDescriptor::SetDefaultDevice(bestDevice);
-        }, "Was able to invoke SetDefaultDevice() after UseDefaultDevice().");
-    }
-}
-
-BOOST_AUTO_TEST_CASE(CpuAndBestDevicesInAllDevices)
-{
-    auto cpuDevice = DeviceDescriptor::CPUDevice();
-    DeviceDescriptor::SetDefaultDevice(cpuDevice);
-
-    BOOST_TEST((DeviceDescriptor::UseDefaultDevice() == cpuDevice));
-
-    // Invoke BestDevice after releasing the lock in UseDefaultDevice().
-    auto bestDevice = DeviceDescriptor::BestDevice();
 
     const auto& allDevices = DeviceDescriptor::AllDevices();
 
 #ifdef CPUONLY
-    BOOST_TEST(allDevices.size() == 1);
+    BOOST_TEST((allDevices.size() == 1));
+#endif
+
+    if (allDevices.size() > 1)
+    {
+        auto nonCpuDevice = std::find_if(allDevices.begin(), allDevices.end(),
+            [&cpuDevice](const DeviceDescriptor& x)->bool{return x != cpuDevice; });
+        
+        VerifyException([&nonCpuDevice]() {
+            DeviceDescriptor::SetDefaultDevice(*nonCpuDevice);
+        }, "Was able to invoke SetDefaultDevice() after UseDefaultDevice().");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(SetNonCPUDeviceAsDefault)
+{
+    auto cpuDevice = DeviceDescriptor::CPUDevice();
+    const auto& allDevices = DeviceDescriptor::AllDevices();
+
+#ifdef CPUONLY
+    BOOST_TEST((allDevices.size() == 1));
+#endif
+
+    if (allDevices.size() > 1)
+    {
+        auto nonCpuDevice = std::find_if(allDevices.begin(), allDevices.end(),
+            [&cpuDevice](const DeviceDescriptor& x)->bool {return x != cpuDevice; });
+
+        DeviceDescriptor::SetDefaultDevice(*nonCpuDevice);
+
+        BOOST_TEST((DeviceDescriptor::DefaultDevice() == *nonCpuDevice));
+        BOOST_TEST((DeviceDescriptor::UseDefaultDevice() == *nonCpuDevice));
+
+        VerifyException([&cpuDevice]() {
+            DeviceDescriptor::SetDefaultDevice(cpuDevice);
+        }, "Was able to invoke SetDefaultDevice() after UseDefaultDevice().");
+    }
+}
+
+BOOST_AUTO_TEST_CASE(TestAllDevicesContainsGPUsAndCPU)
+{
+    auto cpuDevice = DeviceDescriptor::CPUDevice();
+    
+    const auto& allDevices = DeviceDescriptor::AllDevices();
+    BOOST_TEST((find(allDevices.begin(), allDevices.end(), cpuDevice) != allDevices.end()));
+
+#ifdef CPUONLY
+    BOOST_TEST((allDevices.size() == 1));
 #endif
     auto numGpuDevices = allDevices.size() - 1;
 
@@ -69,7 +95,6 @@ BOOST_AUTO_TEST_CASE(CpuAndBestDevicesInAllDevices)
         DeviceDescriptor::GPUDevice((unsigned int)numGpuDevices);
     }, "Was able to create GPU device descriptor with invalid id.");
 
-    BOOST_TEST((find(allDevices.begin(), allDevices.end(), bestDevice) != allDevices.end()));
     BOOST_TEST((allDevices.back() == cpuDevice));
 }
 

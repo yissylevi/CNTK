@@ -111,8 +111,9 @@ namespace CNTK
     ///
     /// Enumeration type denoting the type of a compute device.
     ///
-    enum class DeviceKind
+    enum class DeviceKind : unsigned int
     {
+        AUTO, // indicates a placeholder that will be automatically resolved to an physical device at runtime. Cannot be used explicitly.
         CPU,
         GPU,
         // TODO: FPGA
@@ -137,8 +138,9 @@ namespace CNTK
     {
         friend bool operator==(const DeviceDescriptor& first, const DeviceDescriptor& second);
 
-        static std::atomic<bool> s_defaultDeviceFrozen;
-        static std::shared_ptr<DeviceDescriptor> s_defaultDevice;
+        static std::mutex s_defaultDeviceLock;
+        static bool s_defaultDeviceFrozen;
+        static DeviceDescriptor s_defaultDevice;
         static std::shared_ptr<std::vector<DeviceDescriptor>> s_allDevices;
     public:
         ///
@@ -164,6 +166,8 @@ namespace CNTK
         ///
         /// Static method to get the descriptor of the default device for the current process.
         /// This device is used for all CNTK operations where a device needs to be specified and one is not explicitly specified.
+        /// If no actual device is selected and frozen as a default by a call to UseDefaultDevice(), this method returns a placeholder
+        /// with a type set to DeviceKind::AUTO.
         ///
         CNTK_API static DeviceDescriptor DefaultDevice();
 
@@ -179,11 +183,6 @@ namespace CNTK
         /// The default device can only be changed if it has not yet been implicitly used by any previous operation in the CNTK library.
         ///
         CNTK_API static void SetDefaultDevice(const DeviceDescriptor& newDefaultDevice);
-
-        ///
-        /// Static method to get the descriptor of the best available device.
-        ///
-        CNTK_API static DeviceDescriptor BestDevice();
 
         ///
         /// Static method to get a list of descriptors of all available/supported devices.

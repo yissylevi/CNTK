@@ -39,15 +39,6 @@ def all_devices():
     '''
     return cntk_py.DeviceDescriptor.all_devices()
 
-def best():
-    '''
-    Returns a device descriptor with the best configuration.
-
-    Returns:
-        :class:`~cntk.device.DeviceDescriptor`: Best device descriptor
-    '''
-    return cntk_py.DeviceDescriptor.best_device()
-
 def cpu():
     '''
     Returns CPU device descriptor

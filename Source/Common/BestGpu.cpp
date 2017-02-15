@@ -61,7 +61,7 @@ struct ProcessorData
     nvmlMemory_t memory;
     nvmlUtilization_t utilization;
     cudaDeviceProp deviceProp;
-    bool cntkFound;
+    bool mlAppsFound;
     int deviceId; // the deviceId (cuda side) for this processor
 };
 
@@ -473,7 +473,7 @@ std::vector<int> BestGpu::GetDevices(int number, BestGpuFlags p_bestFlags)
         score += pd->cores / 1000.0f * speedW;
         double mem = pd->memory.total > 0 ? pd->memory.free / (double) pd->memory.total : 1; // I saw this to be 0 when remoted in
         score += mem * freeMemW;
-        score += (pd->cntkFound ? 0 : 1) * mlAppRunningW;
+        score += (pd->mlAppsFound ? 0 : 1) * mlAppRunningW;
         for (int i = 0; i < best.size(); i++)
         {
             // look for a better score
@@ -503,7 +503,7 @@ std::vector<int> BestGpu::GetDevices(int number, BestGpuFlags p_bestFlags)
     }
 
     // global lock for this process
-    CrossProcessMutex deviceAllocationLock("DBN.exe GPGPU querying lock");
+    CrossProcessMutex deviceAllocationLock("CNTK_device_allocation_lock");
 
     if (!deviceAllocationLock.Acquire((bestFlags & bestGpuExclusiveLock) != 0)) // failure  --this should not really happen
         RuntimeError("DeviceFromConfig: Unexpected failure acquiring device allocation lock.");
@@ -680,7 +680,7 @@ void BestGpu::QueryNvmlData()
             result = nvmlDeviceGetComputeRunningProcesses(device, &size, &processInfo[0]);
             if (NVML_SUCCESS != result)
                 return;
-            bool cntkFound = false;
+            bool mlAppsFound = false;
             for (nvmlProcessInfo_t info : processInfo)
             {
                 std::string name;
@@ -694,15 +694,17 @@ void BestGpu::QueryNvmlData()
                 if (GetCurrentProcessId() == info.pid || name.length() == 0)
                     continue;
 #ifdef _WIN32
-                // TODO: add python?
-                cntkFound = cntkFound || EqualCI(name, "cntk.exe"); // recognize ourselves
-                cntkFound = cntkFound || EqualCI(name, "cn.exe") || EqualCI(name, "dbn.exe"); // also recognize some MS-proprietary legacy tools
+                mlAppsFound |= EqualCI(name, "cntk.exe"); // recognize ourselves
+                mlAppsFound |= EqualCI(name, "cn.exe"); // also recognize some MS-proprietary legacy tools
+                mlAppsFound |= EqualCI(name, "dbn.exe"); // also recognize some MS-proprietary legacy tools
+                mlAppsFound |= EqualCI(name, "python.exe");
 #else
-                cntkFound = cntkFound || name == "cntk"; // (Linux is case sensitive)
+                mlAppsFound |= name == "cntk"; // (Linux is case sensitive)
+                mlAppsFound |= name == "python";
 #endif
             }
             // set values to save
-            curPd->cntkFound = cntkFound;
+            curPd->mlAppsFound = mlAppsFound;
         }
     }
     m_nvmlData = true;
@@ -722,7 +724,7 @@ bool BestGpu::LockDevice(int deviceId, bool trial)
     }
     // ported from dbn.exe, not perfect but it works in practice
     char buffer[80];
-    sprintf(buffer, "DBN.exe GPGPU exclusive lock for device %d", deviceId);
+    sprintf(buffer, "CNTK_exclusive_lock_for_GPU_%d", deviceId);
     std::unique_ptr<CrossProcessMutex> mutex(new CrossProcessMutex(buffer));
     if (!mutex->Acquire(/*wait=*/false)) // GPU not available
     {

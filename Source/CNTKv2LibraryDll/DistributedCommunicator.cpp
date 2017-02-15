@@ -99,12 +99,12 @@ namespace CNTK
                 RuntimeError("Aggregation for sparse matrices is currently not supported!");
 
             // TODO: device.Type should be called Kind.
-            if (device.Type() != DeviceKind::GPU)
+            if (device.Type() == DeviceKind::CPU)
             {
                 m_intermediateCPUBuffers[i] = Buffer();
                 m_gpuDataTransferers[i] = nullptr;
             }
-            else
+            else if (device.Type() == DeviceKind::GPU)
             {
                 if (lastGpuDevice.Type() == DeviceKind::CPU)
                     lastGpuDevice = device;
@@ -115,6 +115,10 @@ namespace CNTK
                 m_gpuDataTransferers[i] = std::make_shared<GPUDataTransferer>(device.Id(), true);
                 if (m_intermediateCPUBuffers[i].totalSize < requiredSize)
                     m_intermediateCPUBuffers[i] = AllocateIntermediateBuffer(device.Id(), requiredSize);
+            } 
+            else
+            {
+                LogicError("Invalid device type (%u).", device.Type());
             }
         }
     }
@@ -150,7 +154,7 @@ namespace CNTK
         }
 
         auto device = GetNonCPUDevice(values);
-        if (device.Type() != DeviceKind::CPU)
+        if (device.Type() == DeviceKind::GPU)
         {
             // Since we will be copying the gradients asynchronously, let us
             // ensure that the gradient matrices have been computed before starting to aggregate
@@ -159,6 +163,10 @@ namespace CNTK
             // the gradient aggregation asynchronously on a separate stream
             std::unique_ptr<MatrixComputeStreamEvent> mainStreamSyncEvent(MatrixComputeStreamEvent::Create(device.Id()));
             mainStreamSyncEvent->SynchronizeDataTransferFetchStreamWithEvent<float>();
+        }
+        else
+        {
+            LogicError("Invalid device type (%u).", device.Type());
         }
         AggregateImpl(values, outputValues, sendToWorkers);
     }
@@ -271,7 +279,7 @@ namespace CNTK
         const std::unordered_set<DistributedWorkerDescriptor>& sendToWorkers)
     {
         auto device = GetNonCPUDevice(values);
-        if (device.Type() != DeviceKind::CPU)
+        if (device.Type() == DeviceKind::GPU)
         {
             // Since we will be copying the gradients asynchronously, let us
             // ensure that the gradient matrices have been computed before starting to aggregate
@@ -280,6 +288,10 @@ namespace CNTK
             // the gradient aggregation asynchronously on a separate stream
             std::unique_ptr<MatrixComputeStreamEvent> mainStreamSyncEvent(MatrixComputeStreamEvent::Create(device.Id()));
             mainStreamSyncEvent->SynchronizeDataTransferFetchStreamWithEvent<float>();
+        }
+        else 
+        {
+            LogicError("Invalid device type (%u).", device.Type());
         }
         AggregateImpl(values, values, sendToWorkers);
     }
