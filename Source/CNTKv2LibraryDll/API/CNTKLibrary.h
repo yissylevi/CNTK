@@ -2554,6 +2554,11 @@ namespace CNTK
         /// (e.g. for use as a fixed feature extractor)
         ///
         Freeze,
+
+        ///
+        /// Internal use only
+        ///
+        Invalid,
     };
 
     ///
@@ -2642,6 +2647,8 @@ namespace CNTK
         ///
         CNTK_API virtual void InferOutputs(std::vector<Variable>& outputs) = 0;
 
+        CNTK_API virtual FunctionPtr Clone(const std::vector<Variable>& /*clonedInputs*/) { NOT_IMPLEMENTED; }
+
     public:
 
         // Optional overrides
@@ -2728,7 +2735,7 @@ namespace CNTK
 
         ///
         /// Returns the root of the Function graph underlying this block Function.
-        /// Throws an exception of this is not a block Function
+        /// Throws an exception ff this is not a block Function
         ///
         CNTK_API FunctionPtr BlockRoot() const;
 
@@ -3522,6 +3529,32 @@ namespace CNTK
     ///
     CNTK_API FunctionPtr AsComposite(const FunctionPtr& rootFunction, const std::wstring& name = L"");
 
+    ///
+    /// Create an instance of the CNTK built-in elementwise exponential linear unit operation with the specified input operand.
+    ///
+    CNTK_API FunctionPtr ELU(const Variable& operand, const std::wstring& name = L"");
+
+    ///
+    /// Create an instance of the CNTK built-in elementwise leaky linear rectifier operation with the specified input operand.
+    ///
+    CNTK_API FunctionPtr LeakyReLU(const Variable& operand, const std::wstring& name = L"");
+
+    ///
+    /// Create an instance of the CNTK built-in elementwise parametric rectified linear Unit operation 
+    /// with the specified input operand and learning parameter alpha.
+    ///
+    CNTK_API FunctionPtr PReLU(const Variable& alpha, const Variable& operand, const std::wstring& name = L"");
+
+    ///
+    /// Create an instance of the CNTK built-in argmax operation on specified tensor input operand along the specified axis
+    ///
+    CNTK_API FunctionPtr Argmax(const Variable& operand, const Axis& axis, const std::wstring& name = L"");
+
+    ///
+    /// Create an instance of the CNTK built-in argmin on specified tensor input operand along the specified axis
+    ///
+    CNTK_API FunctionPtr Argmin(const Variable& operand, const Axis& axis, const std::wstring& name = L"");
+
     namespace Sequence
     {
         CNTK_API FunctionPtr IsFirst(const Variable& operand, const std::wstring& name = L"");
@@ -3757,8 +3790,8 @@ namespace CNTK
     CNTK_API void SetDefaultUnitGainValue(bool value);
 
     ///
-    /// Abstraction for learning a subset of parameters of a learnable Function using first order gradient values
-    /// For e.g momentum, AdaGrad, RMSProp etc. are different types of learners with their own algorithms for
+    /// Abstraction for learning a subset of parameters of a learnable Function using first order gradient values.
+    /// For example momentum, AdaGrad, RMSProp, etc. are different types of learners with their own algorithms for
     /// learning parameter values using first order gradients.
     ///
     class Learner
@@ -4694,6 +4727,9 @@ namespace CNTK
         bool keepExistingCheckpoints = false,
         size_t maxNumberOfTrainingSamples = std::numeric_limits<size_t>::max(),
         size_t progressFrequency = std::numeric_limits<size_t>::max());
+
+
+    CNTK_API void PrintBuiltInfo();
 }
 
 
