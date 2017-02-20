@@ -24,7 +24,7 @@ public:
     virtual ~ByteReader() = default;
 
     virtual void Register(const MultiMap& sequences) = 0;
-    virtual cv::Mat Read(size_t seqId, const std::string& path, bool grayscale) = 0;
+    virtual void Read(size_t seqId, const std::string& path, std::vector<unsigned char>& result) = 0;
 
     DISABLE_COPY_AND_MOVE(ByteReader);
 };
@@ -36,7 +36,7 @@ public:
     {}
 
     void Register(const MultiMap&) override {}
-    cv::Mat Read(size_t seqId, const std::string& path, bool grayscale) override;
+    void Read(size_t seqId, const std::string& path, std::vector<unsigned char>& result) override;
 
     std::string m_expandDirectory;
 };
@@ -48,7 +48,7 @@ public:
     ZipByteReader(const std::string& zipPath);
 
     void Register(const std::map<std::string, std::vector<size_t>>& sequences) override;
-    cv::Mat Read(size_t seqId, const std::string& path, bool grayscale) override;
+    void Read(size_t seqId, const std::string& path, std::vector<unsigned char>& result) override;
 
 private:
     using ZipPtr = std::unique_ptr<zip_t, void(*)(zip_t*)>;

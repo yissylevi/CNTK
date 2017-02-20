@@ -68,6 +68,8 @@ private:
     SeqReaderMap m_readers;
 
     std::unique_ptr<FileByteReader> m_defaultReader;
+
+    conc_stack<std::vector<unsigned char>> m_buffers;
 };
 
 }}}

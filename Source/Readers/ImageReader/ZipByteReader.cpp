@@ -89,7 +89,7 @@ void ZipByteReader::Register(const MultiMap& sequences)
     RuntimeError("Cannot retrieve image data for some sequences. For more detail, please see the log file.");
 }
 
-cv::Mat ZipByteReader::Read(size_t seqId, const std::string& path, bool grayscale)
+void ZipByteReader::Read(size_t seqId, const std::string& path, std::vector<unsigned char>& result)
 {
     // Find index of the file in .zip file.
     auto r = m_seqIdToIndex.find(seqId);
@@ -99,11 +99,14 @@ cv::Mat ZipByteReader::Read(size_t seqId, const std::string& path, bool grayscal
     zip_uint64_t index = std::get<0>((*r).second);
     zip_uint64_t size = std::get<1>((*r).second);
 
-    auto contents = m_workspace.pop_or_create([size]() { return vector<unsigned char>(size); });
-    if (contents.size() < size)
-        contents.resize(size);
+    result.clear();
+    result.resize(size);
+
+    //auto contents = m_workspace.pop_or_create([size]() { return vector<unsigned char>(size); });
+    //if (contents.size() < size)
+        //contents.resize(size);
     auto zipFile = m_zips.pop_or_create([this]() { return OpenZip(); });
-    attempt(5, [&zipFile, &contents, &path, index, seqId, size]()
+    attempt(5, [&zipFile, &result, &path, index, seqId, size]()
     {
         std::unique_ptr<zip_file_t, void(*)(zip_file_t*)> file(
             zip_fopen_index(zipFile.get(), index, 0),
@@ -122,8 +125,8 @@ cv::Mat ZipByteReader::Read(size_t seqId, const std::string& path, bool grayscal
             RuntimeError("Could not open file %s in the zip file, sequence id = %lu, zip library error: %s",
                          path.c_str(), (long)seqId, GetZipError(zip_error_code_zip(zip_get_error(zipFile.get()))).c_str());
         }
-        assert(contents.size() >= size);
-        zip_uint64_t bytesRead = zip_fread(file.get(), contents.data(), size);
+        assert(result.size() >= size);
+        zip_uint64_t bytesRead = zip_fread(file.get(), result.data(), size);
         assert(bytesRead == size);
         if (bytesRead != size)
         {
@@ -133,10 +136,6 @@ cv::Mat ZipByteReader::Read(size_t seqId, const std::string& path, bool grayscal
     });
     m_zips.push(std::move(zipFile));
 
-    cv::Mat img = cv::imdecode(contents, grayscale ? cv::IMREAD_GRAYSCALE : cv::IMREAD_COLOR);
-    assert(nullptr != img.data);
-    m_workspace.push(std::move(contents));
-    return img;
 }
 }}}
 

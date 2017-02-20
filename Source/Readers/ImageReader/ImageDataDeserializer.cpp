@@ -22,11 +22,19 @@ class ImageDataDeserializer::ImageChunk : public Chunk
 {
     ImageSequenceDescription m_description;
     ImageDataDeserializer& m_deserializer;
+    std::vector<unsigned char> m_buffer;
 
 public:
     ImageChunk(ImageSequenceDescription& description, ImageDataDeserializer& parent)
         : m_description(description), m_deserializer(parent)
     {
+        m_buffer = m_deserializer.m_buffers.pop_or_create([]() { return std::vector<unsigned char>(); });
+
+        ImageDataDeserializer::SeqReaderMap::const_iterator r;
+        if (parent.m_readers.empty() || (r = parent.m_readers.find(m_description.m_key.m_sequence)) == parent.m_readers.end())
+            parent.m_defaultReader->Read(m_description.m_key.m_sequence, m_description.m_path, m_buffer);
+        else
+            (*r).second->Read(m_description.m_key.m_sequence, m_description.m_path, m_buffer);
     }
 
     virtual void GetSequence(size_t sequenceIndex, std::vector<SequenceDataPtr>& result) override
@@ -34,11 +42,16 @@ public:
         assert(sequenceIndex == 0 && sequenceIndex == m_description.m_indexInChunk);
         UNUSED(sequenceIndex);
 
-        auto cvImage = m_deserializer.ReadImage(m_description.m_key.m_sequence, m_description.m_path, m_deserializer.m_grayscale);
+        auto cvImage = cv::imdecode(m_buffer, m_deserializer.m_grayscale ? cv::IMREAD_GRAYSCALE : cv::IMREAD_COLOR);
         if (!cvImage.data)
             RuntimeError("Cannot open file '%s'", m_description.m_path.c_str());
 
         m_deserializer.PopulateSequenceData(cvImage, m_description.m_classId, m_description.m_copyId, result);
+    }
+
+    ~ImageChunk()
+    {
+        m_deserializer.m_buffers.push(std::move(m_buffer));
     }
 
 private:
@@ -282,22 +295,14 @@ void ImageDataDeserializer::RegisterByteReader(size_t seqId, const std::string& 
 #endif
 }
 
-cv::Mat ImageDataDeserializer::ReadImage(size_t seqId, const std::string& path, bool grayscale)
-{
-    assert(!path.empty());
-
-    ImageDataDeserializer::SeqReaderMap::const_iterator r;
-    if (m_readers.empty() || (r = m_readers.find(seqId)) == m_readers.end())
-        return m_defaultReader->Read(seqId, path, grayscale);
-    return (*r).second->Read(seqId, path, grayscale);
-}
-
-cv::Mat FileByteReader::Read(size_t, const std::string& seqPath, bool grayscale)
+void FileByteReader::Read(size_t, const std::string& seqPath, std::vector<unsigned char>& result)
 {
     assert(!seqPath.empty());
     auto path = Expand3Dots(seqPath, m_expandDirectory);
-
-    return cv::imread(path, grayscale ? cv::IMREAD_GRAYSCALE : cv::IMREAD_COLOR);
+    auto f = fopen(path.c_str(), "rb");
+    size_t size = filesize(f);
+    result.resize(size);
+    freadOrDie(result, size, f);
 }
 
 bool ImageDataDeserializer::GetSequenceDescriptionByKey(const KeyType& key, SequenceDescription& result)
