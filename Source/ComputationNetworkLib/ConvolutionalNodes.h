@@ -763,6 +763,12 @@ public:
                 : Base(deviceId, name, kernelShape, TensorShape(1), strideShape, vector<bool>{true}, autoPadding, lowerPad, upperPad, pool, false, imageLayout, 0)
     {
     }
+    PoolingNode(DEVICEID_TYPE deviceId, const wstring& name, PoolKind pool, const TensorShape& kernelShape, const TensorShape& strideShape,
+        const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad, const bool ceilOutDim,
+        ImageLayoutKind imageLayout)
+        : Base(deviceId, name, kernelShape, TensorShape(1), strideShape, vector<bool>{true}, autoPadding, lowerPad, upperPad, pool, false, imageLayout, 0), m_ceilOutDim(ceilOutDim)
+    {
+    }
     PoolingNode(const ScriptableObjects::IConfigRecordPtr configp)
         : PoolingNode(configp->Get(L"deviceId"), L"<placeholder>", PoolKindFrom(configp->Get(L"pool")), configp->Get(L"kernelShape"),
                       configp->Get(L"strideShape"),
@@ -773,6 +779,31 @@ public:
     }
 
 public:
+    void Save(File& fstream) const override
+    {
+        ConvolutionNodeBase<ElemType>::Save(fstream);
+        fstream << m_ceilOutDim;
+    }
+
+    void Load(File& fstream, size_t modelVersion) override
+    {
+        ConvolutionNodeBase<ElemType>::Load(fstream, modelVersion);
+        if (modelVersion >= CNTK_MODEL_VERSION_19)
+        {
+            fstream >> m_ceilOutDim;
+        }
+    }
+
+    void CopyTo(ComputationNodeBasePtr nodeP, const std::wstring& newName, const CopyNodeFlags flags) const override
+    {
+        ConvolutionNodeBase<ElemType>::CopyTo(nodeP, newName, flags);
+        if (flags & CopyNodeFlags::copyNodeValue)
+        {
+            auto node = dynamic_pointer_cast<PoolingNode<ElemType>>(nodeP);
+            node->m_ceilOutDim = m_ceilOutDim;
+        }
+    }
+
     void ForwardProp(const FrameRange& fr) override
     {
         Matrix<ElemType> sliceOutputValue = ValueFor(fr);
@@ -816,20 +847,22 @@ public:
         InferReductionDims(inputShape, TensorShape());
 
         auto outDims = ConvolveGeometry::ComputeOutputShape(inputShape, m_kernelShape, m_mapCount, m_stride,
-                                                            m_sharing, m_autoPad, m_lowerPad, m_upperPad);
+                                                            m_sharing, m_autoPad, m_lowerPad, m_upperPad, m_ceilOutDim);
         SetDims(outDims, HasMBLayout());
         if (isFinalValidationPass)
         {
             if (m_convEng == nullptr)
             {
                 auto geometry = std::make_shared<ConvolveGeometry>(inputShape, m_kernelShape, m_mapCount, m_stride,
-                                                                   m_sharing, m_autoPad, m_lowerPad, m_upperPad);
+                                                                   m_sharing, m_autoPad, m_lowerPad, m_upperPad, m_ceilOutDim);
                 m_convEng = ConvolutionEngine<ElemType>::Create(geometry, m_deviceId, m_imageLayout,
                                                                 m_maxTempMemSizeInSamples, m_poolKind,
                                                                 ConvolutionEngineKind::All, NodeName());
             }
         }
     }
+    
+    bool CeilOutDim() const { return m_ceilOutDim; }
 
 private:
     using TransformerNode::m_transforms;
@@ -850,6 +883,9 @@ private:
         // We support transforms on all inputs (one here).
         return true;
     }
+
+private:
+    bool m_ceilOutDim;
 };
 
 // -----------------------------------------------------------------------
