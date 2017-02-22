@@ -728,6 +728,8 @@ namespace CNTK
         // version 2: changed in 7af3a7c0e46cb12f873f1289400a9c5d86746662. TODO(n17s): add description.
         // version 3: changed in df0ab4e58186738931968e806b61bc80d7b6e20e. TODO(pkrannen): add description.
         // version 4: added extra parameter (#6) for the running mean sample count in BatchNormalization.
-        static const size_t s_serializationVersion = 7;
+        // version 6: added argmax and argmin to ReduceElement.
+        // version 8: added convolution transpose  
+        static const size_t s_serializationVersion = 8;
     };
 }

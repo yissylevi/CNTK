@@ -54,10 +54,13 @@ public:
     ComputationNodePtr CreateSparseInputNode(const std::wstring& inputName, const TensorShape& sampleLayout, const wstring& dynamicAxisName = L"");
     ComputationNodePtr CreateConvolutionNode(const std::wstring& nodeName, const TensorShape& kernelShape, const TensorShape& mapCount, const TensorShape& strideShape,
                                              const std::vector<bool>& sharing, const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
-                                             bool transpose, ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples);
+                                             ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples);
     ComputationNodePtr CreateConvolutionNode(const std::wstring& nodeName, const size_t kernelWidth, const size_t kernelHeight, const size_t outputChannels, 
                                              const size_t horizontalSubsample, const size_t verticalSubsample, 
                                              ImageLayoutKind imageLayoutKind, const bool zeroPadding = false, const size_t maxTempMemSizeInSamples = 0);
+    ComputationNodePtr CreateConvolutionTransposeNode(const std::wstring& nodeName, const TensorShape& kernelShape, const TensorShape& mapCount, const TensorShape& strideShape,
+                                                      const std::vector<bool>& sharing, const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
+                                                      ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples);
     ComputationNodePtr CreatePoolingNode(const std::wstring& nodeName, PoolKind poolKind, const TensorShape& kernelShape, const TensorShape& strideShape,
                                          const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
                                          ImageLayoutKind imageLayout);
@@ -84,9 +87,15 @@ public:
                                    const ComputationNodePtr inputValues,
                                    const TensorShape& kernelShape, const TensorShape& mapCount, const TensorShape& strideShape,
                                    const std::vector<bool>& sharing, const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
-                                   bool transpose, ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples,
+                                   ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples,
                                    const std::wstring nodeName = L"");
-    ComputationNodePtr Pooling(const ComputationNodePtr inputValues, 
+    ComputationNodePtr ConvolutionTranspose(const ComputationNodePtr weight,
+                                            const ComputationNodePtr inputValues,
+                                            const TensorShape& kernelShape, const TensorShape& mapCount, const TensorShape& strideShape,
+                                            const std::vector<bool>& sharing, const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
+                                            ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples,
+                                            const std::wstring nodeName = L"");
+    ComputationNodePtr Pooling(const ComputationNodePtr inputValues,
                                PoolKind poolKind, const TensorShape& kernelShape, const TensorShape& strideShape,
                                const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
                                ImageLayoutKind imageLayout,

@@ -419,9 +419,8 @@ void NDLNodeEvaluatorImpl<ElemType>::Evaluate(NDLNode<ElemType>* node, const wst
                 }
                 else
                 {
-                    bool transpose = node->GetOptionalParameter("transpose", "false");
                     nodePtr = builder.Convolution(NULL, NULL, kernelShape, mapCount, stride, sharing, 
-                                                  autoPad, lowerPad, upperPad, transpose, imageLayout, maxTempMemSizeInSamples, name);
+                                                  autoPad, lowerPad, upperPad, imageLayout, maxTempMemSizeInSamples, name);
                 }
 
             }

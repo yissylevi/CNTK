@@ -327,6 +327,7 @@ void CheckEnumValuesNotModified() {
                   static_cast<size_t>(PrimitiveOpType::NoOp) == 62 &&
                   static_cast<size_t>(PrimitiveOpType::LabelsToGraph) == 63 &&
                   static_cast<size_t>(PrimitiveOpType::StopGradient) == 64,
+                  static_cast<size_t>(PrimitiveOpType::ConvolutionTranspose) == 65, 
                   "PrimitiveOpType enum value was modified.");
 }
 
