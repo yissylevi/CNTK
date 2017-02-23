@@ -305,7 +305,6 @@ public:
             TransferVectorsToValueBuffers(inputs, stdInputs, pinnedGCHandleList, StorageType::Sparse);
             TransferVectorsToValueBuffers(outputs, stdOutputs, pinnedGCHandleList, StorageType::Dense);
 
-            GC::Collect();
             try
             {
                 m_eval->ForwardPass(stdInputs, stdOutputs, resetRNN);
