@@ -320,11 +320,6 @@ public:
             {
                 throw GetCustomException(ex);
             }
-
-            if (inputs->Length * 3 + outputs->Length != pinnedGCHandleList->Count)
-            {
-                throw gcnew Exception("Unmatched pinnedGCHandleList");
-            }
         }
         catch (Exception^)
         {
@@ -332,10 +327,6 @@ public:
         }
         finally
         {
-            Console::WriteLine("Release {0} pinned handles", pinnedGCHandleList->Count);
-            if (inputs->Length * 3 + outputs->Length != pinnedGCHandleList->Count)
-                Console::WriteLine("FAILED....");
-
             for each (auto h in pinnedGCHandleList)
             {
                 h.Free();
