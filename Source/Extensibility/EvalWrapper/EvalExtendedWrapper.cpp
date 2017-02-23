@@ -320,6 +320,11 @@ public:
             {
                 throw GetCustomException(ex);
             }
+
+            if (inputs->Length * 3 + outputs->Length != pinnedGCHandleList->Count)
+            {
+                throw gcnew Exception("Unmatched pinnedGCHandleList");
+            }
         }
         catch (Exception^)
         {
@@ -327,6 +332,10 @@ public:
         }
         finally
         {
+            Console::WriteLine("Release {0} pinned handles", pinnedGCHandleList->Count);
+            if (inputs->Length * 3 + outputs->Length != pinnedGCHandleList->Count)
+                Console::WriteLine("FAILED....");
+
             for each (auto h in pinnedGCHandleList)
             {
                 h.Free();
@@ -445,7 +454,6 @@ private:
         pinnedGCHandleList->Add(h);
         pin_ptr<ElemType> pp = &(itemBuffer[0]);
         vb->m_buffer.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
-        pp = nullptr;
     }
 
     void PinIndices(cli::array<int>^ itemBuffer, List<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
@@ -454,7 +462,6 @@ private:
         pinnedGCHandleList->Add(h);
         pin_ptr<int> pp = &(itemBuffer[0]);
         vb->m_indices.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
-        pp = nullptr;
     }
 
     void PinColIndices(cli::array<int>^ itemBuffer, List<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
@@ -463,7 +470,6 @@ private:
         pinnedGCHandleList->Add(h);
         pin_ptr<int> pp = &(itemBuffer[0]);
         vb->m_colIndices.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
-        pp = nullptr;
     }
 
     void TransferVectorsToValueBuffers(cli::array<ValueBuffer<ElemType>^>^ list, Native::ValueRefs<ElemType>& valueRefs, List<GCHandle>^ pinnedGCHandleList, StorageType storageType)
