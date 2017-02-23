@@ -305,6 +305,7 @@ public:
             TransferVectorsToValueBuffers(inputs, stdInputs, pinnedGCHandleList, StorageType::Sparse);
             TransferVectorsToValueBuffers(outputs, stdOutputs, pinnedGCHandleList, StorageType::Dense);
 
+            GC::Collect();
             try
             {
                 m_eval->ForwardPass(stdInputs, stdOutputs, resetRNN);
@@ -461,7 +462,7 @@ private:
         GCHandle h = GCHandle::Alloc(itemBuffer, GCHandleType::Pinned);
         pinnedGCHandleList->Add(h);
         pin_ptr<int> pp = &(itemBuffer[0]);
-        vb->m_indices.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
+        vb->m_colIndices.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
         pp = nullptr;
     }
 
