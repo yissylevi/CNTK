@@ -53,6 +53,7 @@ namespace CNTK
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameAutoPadding = L"autoPadding";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameLowerPad = L"lowerPad";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameUpperPad = L"upperPad";
+    /*static*/ const std::wstring PrimitiveFunction::AttributeNameOutputShape = L"outputShape";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameTranspose = L"transpose";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameMaxTempMemSizeInSamples = L"maxTempMemSizeInSamples";
     /*static*/ const std::wstring PrimitiveFunction::AttributeNameROIOutputShape = L"roiOutputShape";
@@ -444,7 +445,7 @@ namespace CNTK
                                 m_attributes[PrimitiveFunction::AttributeNamePoolingWindowShape] = poolingWindowsShape;
                             }
 
-                            outputShape = ConvolutionOpOutputShape(m_op, inputShape, poolingWindowsShape, outputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, false, true);
+                            outputShape = ConvolutionOpOutputShape(m_op, inputShape, poolingWindowsShape, outputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, true);
                             break;
                         }
                         case PrimitiveOpType::Unpooling:
@@ -470,7 +471,7 @@ namespace CNTK
                             NDShape inputMapCount = { 1 };
                             std::vector<bool> sharing = { true };
 
-                            NDShape inferredInputShape = ConvolutionOpOutputShape(PrimitiveOpType::Pooling, outputShape, unpoolingWindowShape, inputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, false, true);
+                            NDShape inferredInputShape = ConvolutionOpOutputShape(PrimitiveOpType::Pooling, outputShape, unpoolingWindowShape, inputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, true);
                             if (inferredInputShape != inputShape)
                                 RuntimeError("The shape of the unpooling operand %ls is different from the result of pooling the poolingInput argument using the provided options %ls", inputShape.AsString().c_str(), inferredInputShape.AsString().c_str());
 
@@ -520,14 +521,45 @@ namespace CNTK
                             auto& upperPad = m_attributes[PrimitiveFunction::AttributeNameUpperPad].Value<NDShape>();
                             auto sharing = AsVector<bool>(m_attributes[PrimitiveFunction::AttributeNameSharing].Value<std::vector<DictionaryValue>>());
                             auto autoPadding = AsVector<bool>(m_attributes[PrimitiveFunction::AttributeNameAutoPadding].Value<std::vector<DictionaryValue>>());
-                            bool transpose = m_attributes[PrimitiveFunction::AttributeNameTranspose].Value<bool>();
                             if (m_inputs[0].Shape().Rank() < m_inputs[1].Shape().Rank())
                                 InvalidArgument("The convolution map should have at least as many axes as the shape of the input it operates on!");
 
                             NDShape outputMapCount, kernelShape;
                             std::tie(outputMapCount, kernelShape) = GetConvolutionOutputMapCountAndKernelShape(m_inputs[0].Shape(), m_inputs[1].Shape());
                             auto originalKernelShape = kernelShape;
-                            outputShape = ConvolutionOpOutputShape(m_op, m_inputs[1].Shape(), kernelShape, outputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, transpose, true);
+                            outputShape = ConvolutionOpOutputShape(m_op, m_inputs[1].Shape(), kernelShape, outputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, true);
+                            if (originalKernelShape != kernelShape)
+                            {
+                                for (size_t i2 = 0; i2 < kernelShape.Rank(); ++i2)
+                                    m_inputs[0].m_dataFields->m_shape[i2] = kernelShape[i2];
+                            }
+
+                            m_attributes[PrimitiveFunction::AttributeNameSharing] = AsDictionaryValueVector(sharing);
+                            m_attributes[PrimitiveFunction::AttributeNameAutoPadding] = AsDictionaryValueVector(autoPadding);
+                            break;
+                        }
+                        case PrimitiveOpType::ConvolutionTranspose:
+                        {
+                            assert(m_inputs.size() == 2);
+                            auto& strides = m_attributes[PrimitiveFunction::AttributeNameStrides].Value<NDShape>();
+                            auto& lowerPad = m_attributes[PrimitiveFunction::AttributeNameLowerPad].Value<NDShape>();
+                            auto& upperPad = m_attributes[PrimitiveFunction::AttributeNameUpperPad].Value<NDShape>();
+                            auto sharing = AsVector<bool>(m_attributes[PrimitiveFunction::AttributeNameSharing].Value<std::vector<DictionaryValue>>());
+                            auto autoPadding = AsVector<bool>(m_attributes[PrimitiveFunction::AttributeNameAutoPadding].Value<std::vector<DictionaryValue>>());
+                            outputShape = m_attributes[PrimitiveFunction::AttributeNameOutputShape].Value<NDShape>();
+                            if (m_inputs[0].Shape().Rank() < m_inputs[1].Shape().Rank())
+                                InvalidArgument("The convolution map should have at least as many axes as the shape of the input it operates on!");
+
+                            auto inputShape = m_inputs[1].Shape();
+                            NDShape outputMapCount, kernelShape;
+                            std::tie(outputMapCount, kernelShape) = GetConvolutionOutputMapCountAndKernelShape(m_inputs[0].Shape(), m_inputs[1].Shape());
+                            if (outputShape.IsUnknown())
+                                outputShape = ConvolutionTransposeOpOutputShape(m_op, inputShape, kernelShape, outputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, true); 
+
+                            auto originalKernelShape = kernelShape;
+                            NDShape inferredInputShape = ConvolutionOpOutputShape(m_op, outputShape, kernelShape, outputMapCount, strides, sharing, autoPadding, lowerPad, upperPad, true);
+                            if (inferredInputShape != inputShape)
+                                RuntimeError("The shape of the convolution transpose operand %ls is different from the result of convoluting the poolingInput argument using the provided options %ls", inputShape.AsString().c_str(), inferredInputShape.AsString().c_str());
                             if (originalKernelShape != kernelShape)
                             {
                                 for (size_t i2 = 0; i2 < kernelShape.Rank(); ++i2)

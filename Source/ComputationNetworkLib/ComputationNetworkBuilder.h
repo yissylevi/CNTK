@@ -60,7 +60,7 @@ public:
                                              ImageLayoutKind imageLayoutKind, const bool zeroPadding = false, const size_t maxTempMemSizeInSamples = 0);
     ComputationNodePtr CreateConvolutionTransposeNode(const std::wstring& nodeName, const TensorShape& kernelShape, const TensorShape& mapCount, const TensorShape& strideShape,
                                                       const std::vector<bool>& sharing, const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
-                                                      ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples);
+                                                      const TensorShape& outputShape, ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples);
     ComputationNodePtr CreatePoolingNode(const std::wstring& nodeName, PoolKind poolKind, const TensorShape& kernelShape, const TensorShape& strideShape,
                                          const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
                                          ImageLayoutKind imageLayout);
@@ -93,7 +93,7 @@ public:
                                             const ComputationNodePtr inputValues,
                                             const TensorShape& kernelShape, const TensorShape& mapCount, const TensorShape& strideShape,
                                             const std::vector<bool>& sharing, const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
-                                            ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples,
+                                            const TensorShape& outputShape, ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples,
                                             const std::wstring nodeName = L"");
     ComputationNodePtr Pooling(const ComputationNodePtr inputValues,
                                PoolKind poolKind, const TensorShape& kernelShape, const TensorShape& strideShape,

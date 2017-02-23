@@ -87,12 +87,13 @@ namespace CNTK
         {PrimitiveOpType::Sin, L"Sin"},
         {PrimitiveOpType::Cos, L"Cos"},
         {PrimitiveOpType::Pass, L"Pass"},
-        { PrimitiveOpType::Block, L"Block" },
-        { PrimitiveOpType::Unpooling, L"Unpooling" },
-        { PrimitiveOpType::LambdaRank, L"LambdaRank" },
-        { PrimitiveOpType::NDCG, L"NDCG" },
-        { PrimitiveOpType::NoOp, L"NoOp" },
-        { PrimitiveOpType::StopGradient, L"StopGradient" }
+        {PrimitiveOpType::Block, L"Block" },
+        {PrimitiveOpType::Unpooling, L"Unpooling" },
+        {PrimitiveOpType::LambdaRank, L"LambdaRank" },
+        {PrimitiveOpType::NDCG, L"NDCG" },
+        {PrimitiveOpType::NoOp, L"NoOp" },
+        {PrimitiveOpType::StopGradient, L"StopGradient" }, 
+        {PrimitiveOpType::ConvolutionTranspose, L"ConvolutionTranspose"}
     };
 
     inline const std::wstring& PrimitiveOpTypeName(PrimitiveOpType opType)
@@ -209,6 +210,7 @@ namespace CNTK
         static const std::wstring AttributeNameAutoPadding;
         static const std::wstring AttributeNameLowerPad;
         static const std::wstring AttributeNameUpperPad;
+        static const std::wstring AttributeNameOutputShape; 
         static const std::wstring AttributeNameTranspose;
         static const std::wstring AttributeNameMaxTempMemSizeInSamples;
         static const std::wstring AttributeNameROIOutputShape;
@@ -622,8 +624,7 @@ namespace CNTK
         }
 
         static NDShape ConvolutionOpOutputShape(PrimitiveOpType op, const NDShape& operandShape, NDShape& kernelShape, NDShape& outputMapCount, NDShape& strides,
-                                                std::vector<bool>& sharing, std::vector<bool>& autoPad, NDShape& lowerPad, NDShape& upperPad,
-                                                bool transpose, bool inferDimensions)
+                                                std::vector<bool>& sharing, std::vector<bool>& autoPad, NDShape& lowerPad, NDShape& upperPad, bool inferDimensions)
         {
             if (inferDimensions)
             {
@@ -662,13 +663,54 @@ namespace CNTK
                 Microsoft::MSR::CNTK::ConvolutionNodeBase<float>::FixVectorShape(filterRank, inputRank, autoPad, false); // no padding for reduction dims
             }
 
-            decltype(&Microsoft::MSR::CNTK::ConvolveGeometry::ComputeOutputShape) computeOutputShapeFunc;
-            if (!transpose)
-                computeOutputShapeFunc = &Microsoft::MSR::CNTK::ConvolveGeometry::ComputeOutputShape;
-            else
-                computeOutputShapeFunc = &Microsoft::MSR::CNTK::ConvolveGeometry::ComputeInputShape;
+            return AsNDShape(Microsoft::MSR::CNTK::ConvolveGeometry::ComputeOutputShape(AsTensorShape(operandShape), AsTensorShape(kernelShape), 
+                                                                                        AsTensorShape(outputMapCount), AsTensorShape(strides), sharing, 
+                                                                                        autoPad, AsTensorShape(lowerPad), AsTensorShape(upperPad)));
+        }
 
-            return AsNDShape(computeOutputShapeFunc(AsTensorShape(operandShape), AsTensorShape(kernelShape), AsTensorShape(outputMapCount), AsTensorShape(strides), sharing, autoPad, AsTensorShape(lowerPad), AsTensorShape(upperPad)));
+        static NDShape ConvolutionTransposeOpOutputShape(PrimitiveOpType op, const NDShape& operandShape, NDShape& kernelShape, NDShape& outputMapCount, NDShape& strides,
+                                                         std::vector<bool>& sharing, std::vector<bool>& autoPad, NDShape& lowerPad, NDShape& upperPad, bool inferDimensions) 
+        {
+            if (inferDimensions)
+            {
+                size_t inputRank = operandShape.Rank();
+
+                // Unknown kernel shape valid only for pooling, however, the shape should have expanded before
+                // this call.
+                if (kernelShape == NDShape::Unknown)
+                {
+                    RuntimeError("Kernel shape can't be Unknown!");
+                }
+
+                // infer reduction dimensions if not given
+                // If kernel has a lower rank than the input then the remaining dimensions are to be reduced over.
+                size_t filterRank = kernelShape.Rank();
+
+                // If the trailing axis dimensionality of the kernel shape is NDShape::InferredDimension, we reduce over it by 
+                // picking the corresponding operand shape dimensionality
+                // This is done by shrinking the filter rank and let the dimensions be inferred from the operand's shape
+                // TODO: Should we do this for all of the axes in kernelShape that have a dimensionailty of NDShape::InferredDimension?
+                if (kernelShape[filterRank - 1] == NDShape::InferredDimension)
+                {
+                    filterRank--;
+                    kernelShape = kernelShape.SubShape(0, filterRank);
+                }
+
+                NDShape fromShape;
+                if (op == PrimitiveOpType::Convolution)
+                    fromShape = operandShape;
+
+                FixNDShape(filterRank, inputRank, kernelShape, 1, fromShape); // convolve over red dim; pool over 1
+                FixNDShape(filterRank, inputRank, strides, 1, fromShape); // stride for reduction dims is red dim or 1
+                FixNDShape(filterRank, inputRank, lowerPad, 0);
+                FixNDShape(filterRank, inputRank, upperPad, 0);
+                Microsoft::MSR::CNTK::ConvolutionNodeBase<float>::FixVectorShape(filterRank, inputRank, sharing, true);
+                Microsoft::MSR::CNTK::ConvolutionNodeBase<float>::FixVectorShape(filterRank, inputRank, autoPad, false); // no padding for reduction dims
+            }
+
+            return AsNDShape(Microsoft::MSR::CNTK::ConvolveGeometry::ComputeInputShape(AsTensorShape(operandShape), AsTensorShape(kernelShape), 
+                                                                                       AsTensorShape(outputMapCount), AsTensorShape(strides), sharing, 
+                                                                                       autoPad, AsTensorShape(lowerPad), AsTensorShape(upperPad)));
         }
 
         static NDShape BatchNormalizationOutputShape(std::vector<Variable>& operands, bool spatial, bool inferDimensions)

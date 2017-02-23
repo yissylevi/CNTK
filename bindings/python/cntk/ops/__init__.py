@@ -515,12 +515,12 @@ def convolution(convolution_map, operand, strides=(1,), sharing=[True],
     lower_pad = sanitize_shape(lower_pad)
     upper_pad = sanitize_shape(upper_pad)
     return convolution(convolution_map, operand, strides, sharing, auto_padding,
-                       lower_pad, upper_pad, False,
+                       lower_pad, upper_pad, 
                        max_temp_mem_size_in_samples, name)
 
 @typemap
 def convolution_transpose(convolution_map, operand, strides=(1,), sharing=[True],
-                          auto_padding=[True], lower_pad=(0,), upper_pad=(0,),
+                          auto_padding=[True], lower_pad=(0,), upper_pad=(0,), output_shape=None, 
                           max_temp_mem_size_in_samples=0, name=''):
     '''
     Computes the transposed convolution of ``convolution_map`` (typically a tensor of learnable parameters) with
@@ -575,14 +575,18 @@ def convolution_transpose(convolution_map, operand, strides=(1,), sharing=[True]
     Returns:
         :class:`~cntk.ops.functions.Function`
     '''
-    from cntk.cntk_py import convolution
+    from cntk.cntk_py import convolution_transpose, NDShape
     operand = sanitize_input(operand)
     strides = sanitize_shape(strides)
     lower_pad = sanitize_shape(lower_pad)
     upper_pad = sanitize_shape(upper_pad)
-    return convolution(convolution_map, operand, strides, sharing, auto_padding,
-                       lower_pad, upper_pad, True,
-                       max_temp_mem_size_in_samples, name)
+    if output_shape is None:
+        output_shape = NDShape.unknown.dimensions()
+    else:
+        output_shape = sanitize_shape(output_shape)
+    return convolution_transpose(convolution_map, operand, strides, sharing, auto_padding,
+                                 lower_pad, upper_pad, output_shape, 
+                                 max_temp_mem_size_in_samples, name)
 
 @typemap
 def roipooling(conv_feature_map, rois, roi_output_shape, name=''):

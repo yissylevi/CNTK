@@ -277,12 +277,12 @@ shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Creat
 template <class ElemType>
 shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::CreateConvolutionTransposeNode(const std::wstring& nodeName, const TensorShape& kernelShape, const TensorShape& mapCount,
                                                                                                           const TensorShape& strideShape, const std::vector<bool>& sharing,
-                                                                                                          const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
+                                                                                                          const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad, const TensorShape& outputShape, 
                                                                                                           ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples)
 {
     return net.AddNodeToNetWithElemType(New<ConvolutionTransposeNode<ElemType>>(net.GetDeviceId(), nodeName,
                                                                                 kernelShape, mapCount, strideShape,
-                                                                                sharing, autoPadding, lowerPad, upperPad,
+                                                                                sharing, autoPadding, lowerPad, upperPad, outputShape, 
                                                                                 imageLayout, maxTempMemSizeInSamples));
 }
 
@@ -371,13 +371,13 @@ shared_ptr<ComputationNode<ElemType>> ComputationNetworkBuilder<ElemType>::Convo
                                                                                                 const ComputationNodePtr inputValues,
                                                                                                 const TensorShape& kernelShape, const TensorShape& mapCount,
                                                                                                 const TensorShape& strideShape, const std::vector<bool>& sharing,
-                                                                                                const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad,
+                                                                                                const std::vector<bool>& autoPadding, const TensorShape& lowerPad, const TensorShape& upperPad, const TensorShape& outputShape, 
                                                                                                 ImageLayoutKind imageLayout, size_t maxTempMemSizeInSamples,
                                                                                                 const std::wstring nodeName)
 {
     return net.AddNodeToNetAndAttachInputs(New<ConvolutionTransposeNode<ElemType>>(net.GetDeviceId(), nodeName,
                                                                                    kernelShape, mapCount, strideShape,
-                                                                                   sharing, autoPadding, lowerPad, upperPad,
+                                                                                   sharing, autoPadding, lowerPad, upperPad, outputShape, 
                                                                                    imageLayout, maxTempMemSizeInSamples),
                                                                                    { weight, inputValues });
 }
