@@ -96,6 +96,29 @@ class NDArrayView(cntk_py.NDArrayView):
 
     @staticmethod
     @typemap
+    def wrap_dense(np_array, read_only=False):
+        '''
+        Create a :class:`NDArrayView` instance from a NumPy array.
+
+        Args:
+            np_array (numpy.ndarray): NumPy array
+            read_only (bool): whether the data can be modified or not
+
+        Returns:
+            :class:`NDArrayView` instance
+        '''
+        if not isinstance(np_array, np.ndarray):
+            raise TypeError('data must be of type numpy.ndarray'
+                    ' and not %s'%type(np_array))
+
+        if not _is_c_contiguous(np_array):
+            warnings.warn('data is not C contiguous; rearrange your data/computation to avoid costly data conversions', RuntimeWarning)
+            np_array = np.ascontiguousarray(np_array)
+
+        return cntk_py.ndarray_view_wrap(np_array, read_only)
+
+    @staticmethod
+    @typemap
     def from_data(data, device=None, read_only=False):
         '''
         Create a :class:`NDArrayView` instance from a NumPy or SciPy sparse array in CSR
@@ -240,12 +263,11 @@ class Value(cntk_py.Value):
         if not isinstance(var, cntk_py.Variable):
             raise TypeError('Variable expected, but got "%s"'%type(var))
 
-        cpu_dev = cpu()
-
-        if not var.dynamic_axes:
+        if len(var.dynamic_axes) <= 1:
             # No dynamic axes -> no batch
             data = Value._as_best_data_type(var, data)
-            ndav = NDArrayView.from_data(data, cpu_dev)
+            # TODO check dense
+            ndav = NDArrayView.wrap_dense(data)
 
             return cntk_py.Value(ndav)
 
@@ -270,7 +292,8 @@ class Value(cntk_py.Value):
         # move it to the requested device.
         for sample in data:
             sample = Value._as_best_data_type(var, sample)
-            ndav = NDArrayView.from_data(sample, cpu_dev)
+            ndav = NDArrayView.wrap_dense(sample)
+            import ipdb;ipdb.set_trace()
 
             list_of_ndavs.append(ndav)
 
