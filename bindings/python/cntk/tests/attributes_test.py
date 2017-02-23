@@ -24,8 +24,7 @@ def test_convolution_attributes():
         'strides': (1, 1, 1), 
         'maxTempMemSizeInSamples': 0, 
         'upperPad': (0, 0, 0), 
-        'lowerPad': (0, 0, 0), 
-        'transpose': False
+        'lowerPad': (0, 0, 0)
         }
     _check(expected, d)
 
