@@ -32,6 +32,13 @@ using namespace std;
 
 namespace CNTK
 {
+    CNTK_API void Learner::ResetLearningRate(const LearningRateSchedule& learningRateSchedule)
+    {
+        m_learningRateSchedule = learningRateSchedule;
+        // we also need to reset the counters that we use to obtain the current rate from the schedule
+        m_sampleCount = m_minibatchCount = m_sweepCount = 0;
+    }
+
     template <typename ElementType>
     /*static*/ shared_ptr<const Matrix<ElementType>> LearnerBase::GetMatrix(const NDArrayViewPtr& arrayView)
     {
@@ -179,7 +186,6 @@ namespace CNTK
                              AdditionalLearningOptions additionalOptions,
                              bool allocateSmoothGradients /* = true */)
                              : Learner(parameters, learningRateSchedule),
-                             m_minibatchCount(0),
                              m_additionalOptions(additionalOptions)
     {
         std::unordered_set<Parameter> uniqueParameters(parameters.begin(), parameters.end());

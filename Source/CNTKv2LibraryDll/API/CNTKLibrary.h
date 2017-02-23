@@ -3865,10 +3865,7 @@ namespace CNTK
         ///
         /// Sets a new learning rate overriding the schedule parameter used to construct this learner.
         ///
-        virtual void ResetLearningRate(const LearningRateSchedule& learningRateSchedule)
-        {
-            m_learningRateSchedule = learningRateSchedule;
-        }
+        CNTK_API virtual void ResetLearningRate(const LearningRateSchedule& learningRateSchedule);
 
         ///
         /// Resets smoothed gradients.
