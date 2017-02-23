@@ -293,7 +293,7 @@ public:
         }
 
         // Hold gc objects in the stack, while performing native actions
-        cli::array<GCHandle>^ pinnedGCHandleList = gcnew cli::array<GCHandle>(100);
+        List<GCHandle>^ pinnedGCHandleList = gcnew List<GCHandle>; 
 
         try
         {
@@ -438,34 +438,34 @@ private:
         }
     }
 
-    void PinBuffer(cli::array<ElemType>^ itemBuffer, cli::array<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
+    void PinBuffer(cli::array<ElemType>^ itemBuffer, List<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
     {
         GCHandle h = GCHandle::Alloc(itemBuffer, GCHandleType::Pinned);
-        pinnedGCHandleList[0] = h;
+        pinnedGCHandleList->Add(h);
         pin_ptr<ElemType> pp = &(itemBuffer[0]);
         vb->m_buffer.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
         pp = nullptr;
     }
 
-    void PinIndices(cli::array<int>^ itemBuffer, cli::array<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
+    void PinIndices(cli::array<int>^ itemBuffer, List<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
     {
         GCHandle h = GCHandle::Alloc(itemBuffer, GCHandleType::Pinned);
-        pinnedGCHandleList[0] = h;
+        pinnedGCHandleList->Add(h);
         pin_ptr<int> pp = &(itemBuffer[0]);
         vb->m_indices.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
         pp = nullptr;
     }
 
-    void PinColIndices(cli::array<int>^ itemBuffer, cli::array<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
+    void PinColIndices(cli::array<int>^ itemBuffer, List<GCHandle>^ pinnedGCHandleList, Native::ValueBuffer<ElemType, Native::VectorRef>* vb, StorageType storageType, int bufferSize)
     {
         GCHandle h = GCHandle::Alloc(itemBuffer, GCHandleType::Pinned);
-        pinnedGCHandleList[0] = h;
+        pinnedGCHandleList->Add(h);
         pin_ptr<int> pp = &(itemBuffer[0]);
         vb->m_indices.InitFrom(pp, bufferSize, storageType == StorageType::Sparse ? bufferSize : 0);
         pp = nullptr;
     }
 
-    void TransferVectorsToValueBuffers(cli::array<ValueBuffer<ElemType>^>^ list, Native::ValueRefs<ElemType>& valueRefs, cli::array<GCHandle>^ pinnedGCHandleList, StorageType storageType)
+    void TransferVectorsToValueBuffers(cli::array<ValueBuffer<ElemType>^>^ list, Native::ValueRefs<ElemType>& valueRefs, List<GCHandle>^ pinnedGCHandleList, StorageType storageType)
     {
         for each (auto item in list)
         {
