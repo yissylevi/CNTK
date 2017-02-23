@@ -292,7 +292,7 @@ public:
             throw gcnew ObjectDisposedException("Object has been disposed.");
         }
 
-        // Hold gc objects in the stack, while performing native actions
+        // Hold all buffers that should be pinned during native operations
         List<GCHandle>^ pinnedGCHandleList = gcnew List<GCHandle>; 
 
         try
